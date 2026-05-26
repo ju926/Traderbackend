@@ -9,10 +9,21 @@ const streamifier = require("streamifier");
 dotenv.config();
 
 const app = express();
+
+// ================= MIDDLEWARE =================
 app.use(cors());
 app.use(express.json());
 
-// ================= CLOUDINARY =================
+// ================= ERROR HANDLERS (IMPORTANT FOR RENDER) =================
+process.on("uncaughtException", (err) => {
+  console.log("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.log("UNHANDLED REJECTION:", err);
+});
+
+// ================= CLOUDINARY CONFIG =================
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -22,9 +33,9 @@ cloudinary.config({
 // ================= MONGODB =================
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected"))
-  .catch(err => console.log(err));
+  .catch(err => console.log("MongoDB error:", err));
 
-// ================= MODEL =================
+// ================= ITEM MODEL =================
 const Item = mongoose.model("Item", {
   name: String,
   description: String,
@@ -35,12 +46,12 @@ const Item = mongoose.model("Item", {
   createdAt: { type: Date, default: Date.now }
 });
 
-// ================= MULTER =================
+// ================= MULTER (memory storage for Cloudinary) =================
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// ================= UPLOAD IMAGE TO CLOUDINARY =================
-function uploadToCloudinary(fileBuffer) {
+// ================= CLOUDINARY UPLOAD FUNCTION =================
+function uploadToCloudinary(buffer) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       { folder: "swaply" },
@@ -50,7 +61,7 @@ function uploadToCloudinary(fileBuffer) {
       }
     );
 
-    streamifier.createReadStream(fileBuffer).pipe(stream);
+    streamifier.createReadStream(buffer).pipe(stream);
   });
 }
 
@@ -58,8 +69,12 @@ function uploadToCloudinary(fileBuffer) {
 
 // GET ALL ITEMS
 app.get("/items", async (req, res) => {
-  const items = await Item.find().sort({ createdAt: -1 });
-  res.json(items);
+  try {
+    const items = await Item.find().sort({ createdAt: -1 });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // CREATE ITEM (WITH IMAGE UPLOAD)
@@ -85,30 +100,45 @@ app.post("/items", upload.single("image"), async (req, res) => {
     res.json(newItem);
 
   } catch (err) {
-    console.log(err);
+    console.log("UPLOAD ERROR:", err);
     res.status(500).json({ error: "Upload failed" });
   }
 });
 
 // UPDATE ITEM (ADMIN)
 app.put("/items/:id", async (req, res) => {
-  const updated = await Item.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true }
-  );
+  try {
+    const updated = await Item.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
 
-  res.json(updated);
+    res.json(updated);
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DELETE ITEM (ADMIN)
 app.delete("/items/:id", async (req, res) => {
-  await Item.findByIdAndDelete(req.params.id);
-  res.json({ message: "Deleted" });
+  try {
+    await Item.findByIdAndDelete(req.params.id);
+    res.json({ message: "Deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// ================= SERVER =================
+// ================= HEALTH CHECK =================
+app.get("/", (req, res) => {
+  res.send("Swaply API is running 🚀");
+});
+
+// ================= START SERVER =================
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
 });
