@@ -1,11 +1,15 @@
+require("dotenv").config();
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const dotenv = require("dotenv");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
 const http = require("http");
 const { Server } = require("socket.io");
-
-dotenv.config();
+const compression = require("compression");
 
 const app = express();
 
@@ -19,38 +23,82 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
+app.use(compression());
 
-/* DATABASE */
+/* =========================================
+   CLOUDINARY
+========================================= */
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+/* =========================================
+   MULTER
+========================================= */
+
+const storage = multer.memoryStorage();
+
+const upload = multer({
+  storage
+});
+
+/* =========================================
+   DATABASE
+========================================= */
 
 mongoose.connect(process.env.MONGO_URL)
-
 .then(() => {
-
   console.log("✅ MongoDB Connected");
-
 })
-
-.catch((err) => {
-
+.catch(err => {
   console.log("❌ MongoDB Error:", err);
+});
+
+/* =========================================
+   MODELS
+========================================= */
+
+const User = mongoose.model("User", {
+
+  username: String,
+
+  email: String,
+
+  password: String,
+
+  avatar: {
+    type: String,
+    default:
+      "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+  },
+
+  online: {
+    type: Boolean,
+    default: false
+  }
 
 });
 
-/* ITEM MODEL */
-
 const Item = mongoose.model("Item", {
 
-  title: String,
+  name: String,
 
   description: String,
 
   category: String,
 
-  price: Number,
+  price: String,
+
+  wanted: String,
 
   image: String,
 
-  location: String,
+  sellerName: String,
+
+  sellerPhone: String,
 
   createdAt: {
     type: Date,
@@ -58,16 +106,16 @@ const Item = mongoose.model("Item", {
   }
 
 });
-
-/* MESSAGE MODEL */
 
 const Message = mongoose.model("Message", {
 
-  itemId: String,
+  senderId: String,
 
-  sender: String,
+  receiverId: String,
 
   text: String,
+
+  image: String,
 
   createdAt: {
     type: Date,
@@ -76,17 +124,226 @@ const Message = mongoose.model("Message", {
 
 });
 
-/* ROUTES */
+/* =========================================
+   JWT AUTH
+========================================= */
 
-/* HOME */
+function auth(req, res, next) {
 
-app.get("/", (req, res) => {
+  try {
 
-  res.send("🚀 Swaply Marketplace Backend Running");
+    const token = req.headers.authorization;
+
+    if (!token) {
+
+      return res.status(401).json({
+        message: "No token"
+      });
+
+    }
+
+    const verified = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
+
+    req.user = verified;
+
+    next();
+
+  } catch(err) {
+
+    res.status(401).json({
+      message: "Invalid token"
+    });
+
+  }
+
+}
+
+/* =========================================
+   REGISTER
+========================================= */
+
+app.post("/register", async (req, res) => {
+
+  try {
+
+    const { username, email, password } = req.body;
+
+    const existing = await User.findOne({ email });
+
+    if (existing) {
+
+      return res.status(400).json({
+        message: "User already exists"
+      });
+
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
+
+      username,
+
+      email,
+
+      password: hashed
+
+    });
+
+    res.json({
+      success: true,
+      user
+    });
+
+  } catch(err) {
+
+    res.status(500).json({
+      message: "Registration failed"
+    });
+
+  }
 
 });
 
-/* GET ITEMS */
+/* =========================================
+   LOGIN
+========================================= */
+
+app.post("/login", async (req, res) => {
+
+  try {
+
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+
+      return res.status(401).json({
+        message: "Invalid credentials"
+      });
+
+    }
+
+    const valid = await bcrypt.compare(
+      password,
+      user.password
+    );
+
+    if (!valid) {
+
+      return res.status(401).json({
+        message: "Invalid credentials"
+      });
+
+    }
+
+    const token = jwt.sign({
+
+      id: user._id,
+      email: user.email
+
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "30d"
+    });
+
+    res.json({
+
+      token,
+
+      user: {
+
+        id: user._id,
+
+        username: user.username,
+
+        email: user.email,
+
+        avatar: user.avatar
+
+      }
+
+    });
+
+  } catch(err) {
+
+    res.status(500).json({
+      message: "Login failed"
+    });
+
+  }
+
+});
+
+/* =========================================
+   CREATE ITEM WITH CLOUDINARY
+========================================= */
+
+app.post(
+  "/upload",
+  upload.single("image"),
+  async (req, res) => {
+
+  try {
+
+    let imageUrl = "";
+
+    if (req.file) {
+
+      const base64 =
+        `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+
+      const uploaded =
+        await cloudinary.uploader.upload(base64, {
+          folder: "swaply"
+        });
+
+      imageUrl = uploaded.secure_url;
+
+    }
+
+    const item = await Item.create({
+
+      name: req.body.name,
+
+      description: req.body.description,
+
+      category: req.body.category,
+
+      price: req.body.price,
+
+      wanted: req.body.wanted,
+
+      sellerName: req.body.sellerName,
+
+      sellerPhone: req.body.sellerPhone,
+
+      image: imageUrl
+
+    });
+
+    res.json(item);
+
+  } catch(err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      message: "Upload failed"
+    });
+
+  }
+
+});
+
+/* =========================================
+   GET ITEMS
+========================================= */
 
 app.get("/items", async (req, res) => {
 
@@ -97,37 +354,19 @@ app.get("/items", async (req, res) => {
 
     res.json(items);
 
-  } catch (err) {
+  } catch(err) {
 
     res.status(500).json({
-      error: err.message
+      message: "Failed to fetch items"
     });
 
   }
 
 });
 
-/* ADD ITEM */
-
-app.post("/items", async (req, res) => {
-
-  try {
-
-    const item = await Item.create(req.body);
-
-    res.json(item);
-
-  } catch (err) {
-
-    res.status(500).json({
-      error: err.message
-    });
-
-  }
-
-});
-
-/* DELETE ITEM */
+/* =========================================
+   DELETE ITEM
+========================================= */
 
 app.delete("/items/:id", async (req, res) => {
 
@@ -139,55 +378,62 @@ app.delete("/items/:id", async (req, res) => {
       success: true
     });
 
-  } catch (err) {
+  } catch(err) {
 
     res.status(500).json({
-      error: err.message
+      message: "Delete failed"
     });
 
   }
 
 });
 
-/* GET CHAT */
+/* =========================================
+   CHAT MESSAGES
+========================================= */
 
-app.get("/messages/:itemId", async (req, res) => {
+app.get("/messages", async (req, res) => {
 
   try {
 
-    const messages = await Message.find({
-      itemId: req.params.itemId
-    });
+    const messages = await Message.find()
+    .sort({ createdAt: 1 });
 
     res.json(messages);
 
-  } catch (err) {
+  } catch(err) {
 
     res.status(500).json({
-      error: err.message
+      message: "Failed"
     });
 
   }
 
 });
 
-/* SOCKET.IO */
+/* =========================================
+   SOCKET.IO LIVE CHAT
+========================================= */
 
-io.on("connection", (socket) => {
+io.on("connection", socket => {
 
   console.log("🟢 User Connected");
 
-  socket.on("joinRoom", (itemId) => {
+  socket.on("send_message", async data => {
 
-    socket.join(itemId);
+    const message = await Message.create({
 
-  });
+      senderId: data.senderId,
 
-  socket.on("sendMessage", async (data) => {
+      receiverId: data.receiverId,
 
-    const message = await Message.create(data);
+      text: data.text,
 
-    io.to(data.itemId).emit("newMessage", message);
+      image: data.image || ""
+
+    });
+
+    io.emit("receive_message", message);
 
   });
 
@@ -199,7 +445,19 @@ io.on("connection", (socket) => {
 
 });
 
-/* START */
+/* =========================================
+   ROOT
+========================================= */
+
+app.get("/", (req, res) => {
+
+  res.send("🚀 Swaply Backend Running");
+
+});
+
+/* =========================================
+   SERVER
+========================================= */
 
 const PORT = process.env.PORT || 5000;
 
