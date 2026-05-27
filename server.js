@@ -1,136 +1,228 @@
+require("dotenv").config();
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-require("dotenv").config();
+const bcrypt = require("bcryptjs");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: "*"
+  }
+});
+
 app.use(cors());
 app.use(express.json());
 
-// ========================
-// DB CONNECTION (FIXED)
-// ========================
-const MONGO_URL = process.env.MONGO_URI || process.env.MONGO_URL;
+mongoose.connect(process.env.MONGO_URL)
+.then(() => console.log("MongoDB Connected"))
+.catch(err => console.log(err));
 
-if (!MONGO_URL) {
-  console.error("❌ MongoDB URI is missing in environment variables");
-  process.exit(1);
-}
-
-mongoose.connect(MONGO_URL)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err => console.log("❌ DB Error:", err));
-
-// ========================
-// MODELS
-// ========================
 const User = mongoose.model("User", {
+  name: String,
   email: String,
-  password: String
+  password: String,
+  avatar: String
 });
 
 const Item = mongoose.model("Item", {
-  name: String,
+  title: String,
   description: String,
   category: String,
   wanted: String,
-  imageURL: String,
-  userId: String
+  image: String,
+  ownerId: String,
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
 });
 
-// ========================
-// AUTH MIDDLEWARE
-// ========================
+const Message = mongoose.model("Message", {
+  chatId: String,
+  senderId: String,
+  receiverId: String,
+  message: String,
+  image: String,
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
 function auth(req, res, next) {
+
   try {
+
     const token = req.headers.authorization;
 
-    if (!token) return res.status(401).json({ message: "No token" });
+    if (!token) {
+      return res.status(401).send("No token");
+    }
 
-    const data = jwt.verify(token, "secret");
-    req.user = data;
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
+
+    req.user = decoded;
 
     next();
-  } catch (err) {
-    return res.status(401).json({ message: "Invalid token" });
+
+  } catch {
+    res.status(401).send("Invalid token");
   }
 }
 
-// ========================
-// REGISTER
-// ========================
 app.post("/register", async (req, res) => {
-  try {
-    const user = await User.create(req.body);
-    res.json(user);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+
+  const hashed = await bcrypt.hash(
+    req.body.password,
+    10
+  );
+
+  const user = await User.create({
+    name: req.body.name,
+    email: req.body.email,
+    password: hashed
+  });
+
+  res.json(user);
 });
 
-// ========================
-// LOGIN
-// ========================
 app.post("/login", async (req, res) => {
-  try {
-    const user = await User.findOne(req.body);
 
-    if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
+  const user = await User.findOne({
+    email: req.body.email
+  });
 
-    const token = jwt.sign({ id: user._id }, "secret", {
-      expiresIn: "7d"
+  if (!user) {
+    return res.status(401).json({
+      message: "Invalid email"
     });
-
-    res.json({ token, user });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
   }
+
+  const valid = await bcrypt.compare(
+    req.body.password,
+    user.password
+  );
+
+  if (!valid) {
+    return res.status(401).json({
+      message: "Wrong password"
+    });
+  }
+
+  const token = jwt.sign(
+    {
+      id: user._id
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "7d"
+    }
+  );
+
+  res.json({
+    token,
+    userId: user._id,
+    name: user.name
+  });
 });
 
-// ========================
-// GET ITEMS
-// ========================
-app.get("/items", async (req, res) => {
-  const items = await Item.find();
-  res.json(items);
-});
-
-// ========================
-// CREATE ITEM (PROTECTED)
-// ========================
 app.post("/items", auth, async (req, res) => {
+
   const item = await Item.create({
     ...req.body,
-    userId: req.user.id
+    ownerId: req.user.id
   });
 
   res.json(item);
 });
 
-// ========================
-// DELETE ITEM (ADMIN OR OWNER)
-// ========================
+app.get("/items", async (req, res) => {
+
+  const items = await Item.find().sort({
+    createdAt: -1
+  });
+
+  res.json(items);
+});
+
 app.delete("/items/:id", auth, async (req, res) => {
-  const item = await Item.findById(req.params.id);
-
-  if (!item) return res.status(404).json({ message: "Not found" });
-
-  // only owner can delete (future admin upgrade possible)
-  if (item.userId !== req.user.id) {
-    return res.status(403).json({ message: "Not allowed" });
-  }
 
   await Item.findByIdAndDelete(req.params.id);
 
-  res.json({ success: true });
+  res.json({
+    success: true
+  });
 });
 
-// ========================
-// START SERVER
-// ========================
+app.get("/messages/:chatId", auth, async (req, res) => {
+
+  const messages = await Message.find({
+    chatId: req.params.chatId
+  });
+
+  res.json(messages);
+});
+
+let onlineUsers = {};
+
+io.on("connection", (socket) => {
+
+  socket.on("joinChat", (chatId) => {
+    socket.join(chatId);
+  });
+
+  socket.on("userOnline", (userId) => {
+
+    onlineUsers[userId] = socket.id;
+
+    io.emit(
+      "onlineUsers",
+      Object.keys(onlineUsers)
+    );
+  });
+
+  socket.on("sendMessage", async (data) => {
+
+    const message = await Message.create(data);
+
+    io.to(data.chatId).emit(
+      "receiveMessage",
+      message
+    );
+  });
+
+  socket.on("typing", (chatId) => {
+    socket.to(chatId).emit("typing");
+  });
+
+  socket.on("disconnect", () => {
+
+    for (let id in onlineUsers) {
+
+      if (onlineUsers[id] === socket.id) {
+        delete onlineUsers[id];
+      }
+    }
+
+    io.emit(
+      "onlineUsers",
+      Object.keys(onlineUsers)
+    );
+  });
+});
+
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log("Server running");
+});
