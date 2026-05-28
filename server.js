@@ -74,23 +74,23 @@ multer({
 ========================================= */
 
 mongoose.connect(
-  process.env.MONGO_URL
+process.env.MONGO_URL
 )
 
 .then(() => {
 
-  console.log(
-    "✅ MongoDB Connected"
-  );
+console.log(
+"✅ MongoDB Connected"
+);
 
 })
 
 .catch(err => {
 
-  console.log(
-    "❌ MongoDB Error:",
-    err
-  );
+console.log(
+"❌ MongoDB Error:",
+err
+);
 
 });
 
@@ -101,104 +101,120 @@ mongoose.connect(
 const User =
 mongoose.model("User", {
 
-  username: String,
+username: String,
 
-  email: String,
+email: String,
 
-  password: String,
+password: String,
 
-  avatar: {
+avatar: {
 
-    type: String,
+type: String,
 
-    default:
-    "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+default:
+"https://cdn-icons-png.flaticon.com/512/149/149071.png"
 
-  },
+},
 
-  online: {
+online: {
 
-    type: Boolean,
+type: Boolean,
 
-    default: false
+default: false
 
-  },
+},
 
-  isAdmin: {
+isAdmin: {
 
-    type: Boolean,
+type: Boolean,
 
-    default: false
+default: false
 
-  },
+},
 
-  createdAt: {
+createdAt: {
 
-    type: Date,
+type: Date,
 
-    default: Date.now
+default: Date.now
 
-  }
+}
 
 });
 
 const Item =
 mongoose.model("Item", {
 
-  name: String,
+name: String,
 
-  description: String,
+description: String,
 
-  category: String,
+category: String,
 
-  price: String,
+price: String,
 
-  wanted: String,
+wanted: String,
 
-  image: String,
+image: String,
 
-  sellerName: String,
+sellerName: String,
 
-  sellerPhone: String,
+sellerPhone: String,
 
-  createdAt: {
+createdAt: {
 
-    type: Date,
+type: Date,
 
-    default: Date.now
+default: Date.now
 
-  }
+}
 
 });
 
 const Message =
 mongoose.model("Message", {
 
-  senderId: String,
+senderId: String,
 
-  senderName: String,
+senderName: String,
 
-  receiverId: String,
+receiverId: String,
 
-  text: String,
+text: String,
 
-  image: String,
+image: String,
 
-  isAdminReply: {
+replyTo: {
 
-    type: Boolean,
+type: String,
 
-    default: false
+default: ""
 
-  },
+},
 
-  createdAt: {
+replyText: {
 
-    type: Date,
+type: String,
 
-    default: Date.now
+default: ""
 
-  }
+},
+
+isAdminReply: {
+
+type: Boolean,
+
+default: false
+
+},
+
+createdAt: {
+
+type: Date,
+
+default: Date.now
+
+}
 
 });
 
@@ -208,37 +224,37 @@ mongoose.model("Message", {
 
 function auth(req,res,next){
 
-  try {
+try {
 
-    const token =
-    req.headers.authorization;
+const token =
+req.headers.authorization;
 
-    if(!token){
+if(!token){
 
-      return res.status(401)
-      .json({
-        message:"No token"
-      });
+return res.status(401)
+.json({
+message:"No token"
+});
 
-    }
+}
 
-    const verified =
-    jwt.verify(
-      token,
-      process.env.JWT_SECRET
-    );
+const verified =
+jwt.verify(
+token,
+process.env.JWT_SECRET
+);
 
-    req.user = verified;
+req.user = verified;
 
-    next();
+next();
 
-  } catch(err){
+} catch(err){
 
-    res.status(401).json({
-      message:"Invalid token"
-    });
+res.status(401).json({
+message:"Invalid token"
+});
 
-  }
+}
 
 }
 
@@ -250,60 +266,60 @@ app.post(
 "/register",
 async(req,res)=>{
 
-  try {
+try {
 
-    const {
-      username,
-      email,
-      password
-    } = req.body;
+const {
+username,
+email,
+password
+} = req.body;
 
-    const existing =
-    await User.findOne({
-      email
-    });
+const existing =
+await User.findOne({
+email
+});
 
-    if(existing){
+if(existing){
 
-      return res.status(400)
-      .json({
-        message:"User already exists"
-      });
+return res.status(400)
+.json({
+message:"User already exists"
+});
 
-    }
+}
 
-    const hashed =
-    await bcrypt.hash(
-      password,
-      10
-    );
+const hashed =
+await bcrypt.hash(
+password,
+10
+);
 
-    const user =
-    await User.create({
+const user =
+await User.create({
 
-      username,
+username,
 
-      email,
+email,
 
-      password: hashed
+password: hashed
 
-    });
+});
 
-    res.json({
+res.json({
 
-      success:true,
+success:true,
 
-      user
+user
 
-    });
+});
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Registration failed"
-    });
+res.status(500).json({
+message:"Registration failed"
+});
 
-  }
+}
 
 });
 
@@ -315,92 +331,92 @@ app.post(
 "/login",
 async(req,res)=>{
 
-  try {
+try {
 
-    const {
-      email,
-      password
-    } = req.body;
+const {
+email,
+password
+} = req.body;
 
-    const user =
-    await User.findOne({
-      email
-    });
+const user =
+await User.findOne({
+email
+});
 
-    if(!user){
+if(!user){
 
-      return res.status(401)
-      .json({
-        message:"Invalid credentials"
-      });
+return res.status(401)
+.json({
+message:"Invalid credentials"
+});
 
-    }
+}
 
-    const valid =
-    await bcrypt.compare(
-      password,
-      user.password
-    );
+const valid =
+await bcrypt.compare(
+password,
+user.password
+);
 
-    if(!valid){
+if(!valid){
 
-      return res.status(401)
-      .json({
-        message:"Invalid credentials"
-      });
+return res.status(401)
+.json({
+message:"Invalid credentials"
+});
 
-    }
+}
 
-    user.online = true;
+user.online = true;
 
-    await user.save();
+await user.save();
 
-    const token =
-    jwt.sign({
+const token =
+jwt.sign({
 
-      id:user._id,
+id:user._id,
 
-      email:user.email,
+email:user.email,
 
-      username:user.username,
+username:user.username,
 
-      isAdmin:user.isAdmin
+isAdmin:user.isAdmin
 
-    },
-    process.env.JWT_SECRET,
-    {
-      expiresIn:"30d"
-    });
+},
+process.env.JWT_SECRET,
+{
+expiresIn:"30d"
+});
 
-    res.json({
+res.json({
 
-      token,
+token,
 
-      user:{
+user:{
 
-        id:user._id,
+id:user._id,
 
-        username:user.username,
+username:user.username,
 
-        email:user.email,
+email:user.email,
 
-        avatar:user.avatar,
+avatar:user.avatar,
 
-        online:user.online,
+online:user.online,
 
-        isAdmin:user.isAdmin
+isAdmin:user.isAdmin
 
-      }
+}
 
-    });
+});
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Login failed"
-    });
+res.status(500).json({
+message:"Login failed"
+});
 
-  }
+}
 
 });
 
@@ -413,26 +429,26 @@ app.post(
 auth,
 async(req,res)=>{
 
-  try {
+try {
 
-    await User.findByIdAndUpdate(
-      req.user.id,
-      {
-        online:false
-      }
-    );
+await User.findByIdAndUpdate(
+req.user.id,
+{
+online:false
+}
+);
 
-    res.json({
-      success:true
-    });
+res.json({
+success:true
+});
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Logout failed"
-    });
+res.status(500).json({
+message:"Logout failed"
+});
 
-  }
+}
 
 });
 
@@ -444,22 +460,22 @@ app.get(
 "/users",
 async(req,res)=>{
 
-  try {
+try {
 
-    const users =
-    await User.find()
-    .select("-password")
-    .sort({online:-1});
+const users =
+await User.find()
+.select("-password")
+.sort({online:-1});
 
-    res.json(users);
+res.json(users);
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Failed to fetch users"
-    });
+res.status(500).json({
+message:"Failed to fetch users"
+});
 
-  }
+}
 
 });
 
@@ -471,23 +487,23 @@ app.delete(
 "/users/:id",
 async(req,res)=>{
 
-  try {
+try {
 
-    await User.findByIdAndDelete(
-      req.params.id
-    );
+await User.findByIdAndDelete(
+req.params.id
+);
 
-    res.json({
-      success:true
-    });
+res.json({
+success:true
+});
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Delete user failed"
-    });
+res.status(500).json({
+message:"Delete user failed"
+});
 
-  }
+}
 
 });
 
@@ -500,60 +516,60 @@ app.post(
 upload.single("image"),
 async(req,res)=>{
 
-  try {
+try {
 
-    let imageUrl = "";
+let imageUrl = "";
 
-    if(req.file){
+if(req.file){
 
-      const base64 =
-      `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+const base64 =
+`data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
-      const uploaded =
-      await cloudinary
-      .uploader.upload(base64,{
+const uploaded =
+await cloudinary
+.uploader.upload(base64,{
 
-        folder:"swaply"
+folder:"swaply"
 
-      });
+});
 
-      imageUrl =
-      uploaded.secure_url;
+imageUrl =
+uploaded.secure_url;
 
-    }
+}
 
-    const item =
-    await Item.create({
+const item =
+await Item.create({
 
-      name:req.body.name,
+name:req.body.name,
 
-      description:req.body.description,
+description:req.body.description,
 
-      category:req.body.category,
+category:req.body.category,
 
-      price:req.body.price,
+price:req.body.price,
 
-      wanted:req.body.wanted,
+wanted:req.body.wanted,
 
-      sellerName:req.body.sellerName,
+sellerName:req.body.sellerName,
 
-      sellerPhone:req.body.sellerPhone,
+sellerPhone:req.body.sellerPhone,
 
-      image:imageUrl
+image:imageUrl
 
-    });
+});
 
-    res.json(item);
+res.json(item);
 
-  } catch(err){
+} catch(err){
 
-    console.log(err);
+console.log(err);
 
-    res.status(500).json({
-      message:"Upload failed"
-    });
+res.status(500).json({
+message:"Upload failed"
+});
 
-  }
+}
 
 });
 
@@ -565,21 +581,21 @@ app.get(
 "/items",
 async(req,res)=>{
 
-  try {
+try {
 
-    const items =
-    await Item.find()
-    .sort({createdAt:-1});
+const items =
+await Item.find()
+.sort({createdAt:-1});
 
-    res.json(items);
+res.json(items);
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Failed to fetch items"
-    });
+res.status(500).json({
+message:"Failed to fetch items"
+});
 
-  }
+}
 
 });
 
@@ -591,30 +607,30 @@ app.put(
 "/items/:id",
 async(req,res)=>{
 
-  try {
+try {
 
-    const updated =
-    await Item.findByIdAndUpdate(
+const updated =
+await Item.findByIdAndUpdate(
 
-      req.params.id,
+req.params.id,
 
-      req.body,
+req.body,
 
-      {
-        new:true
-      }
+{
+new:true
+}
 
-    );
+);
 
-    res.json(updated);
+res.json(updated);
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Update failed"
-    });
+res.status(500).json({
+message:"Update failed"
+});
 
-  }
+}
 
 });
 
@@ -626,23 +642,23 @@ app.delete(
 "/items/:id",
 async(req,res)=>{
 
-  try {
+try {
 
-    await Item.findByIdAndDelete(
-      req.params.id
-    );
+await Item.findByIdAndDelete(
+req.params.id
+);
 
-    res.json({
-      success:true
-    });
+res.json({
+success:true
+});
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Delete failed"
-    });
+res.status(500).json({
+message:"Delete failed"
+});
 
-  }
+}
 
 });
 
@@ -654,21 +670,21 @@ app.get(
 "/messages",
 async(req,res)=>{
 
-  try {
+try {
 
-    const messages =
-    await Message.find()
-    .sort({createdAt:1});
+const messages =
+await Message.find()
+.sort({createdAt:1});
 
-    res.json(messages);
+res.json(messages);
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Failed"
-    });
+res.status(500).json({
+message:"Failed"
+});
 
-  }
+}
 
 });
 
@@ -680,37 +696,37 @@ app.post(
 "/admin/reply",
 async(req,res)=>{
 
-  try {
+try {
 
-    const message =
-    await Message.create({
+const message =
+await Message.create({
 
-      senderId:"ADMIN",
+senderId:"ADMIN",
 
-      senderName:"Swaply Admin",
+senderName:"Admin",
 
-      receiverId:req.body.receiverId,
+receiverId:req.body.receiverId,
 
-      text:req.body.text,
+text:req.body.text,
 
-      isAdminReply:true
+isAdminReply:true
 
-    });
+});
 
-    io.emit(
-      "receive_message",
-      message
-    );
+io.emit(
+"receive_message",
+message
+);
 
-    res.json(message);
+res.json(message);
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Reply failed"
-    });
+res.status(500).json({
+message:"Reply failed"
+});
 
-  }
+}
 
 });
 
@@ -722,23 +738,23 @@ app.delete(
 "/messages/:id",
 async(req,res)=>{
 
-  try {
+try {
 
-    await Message.findByIdAndDelete(
-      req.params.id
-    );
+await Message.findByIdAndDelete(
+req.params.id
+);
 
-    res.json({
-      success:true
-    });
+res.json({
+success:true
+});
 
-  } catch(err){
+} catch(err){
 
-    res.status(500).json({
-      message:"Delete failed"
-    });
+res.status(500).json({
+message:"Delete failed"
+});
 
-  }
+}
 
 });
 
@@ -748,240 +764,282 @@ async(req,res)=>{
 
 io.on("connection", socket => {
 
-  console.log(
-    "🟢 User Connected"
-  );
+console.log(
+"🟢 User Connected"
+);
 
-  /* =========================================
-     SEND MESSAGE
-  ========================================= */
+/* =========================================
+   SEND MESSAGE
+========================================= */
 
-  socket.on(
-  "send_message",
-  async data => {
+socket.on(
+"send_message",
+async data => {
 
-    try {
+try {
 
-      /* =========================
-         SAVE USER MESSAGE
-      ========================= */
+/* =========================================
+   SAVE USER MESSAGE
+========================================= */
 
-      const message =
-      await Message.create({
+const message =
+await Message.create({
 
-        senderId:data.senderId,
+senderId:data.senderId,
 
-        senderName:data.senderName,
+senderName:data.senderName,
 
-        receiverId:data.receiverId,
+receiverId:data.receiverId,
 
-        text:data.text,
+text:data.text,
 
-        image:data.image || ""
+image:data.image || "",
 
-      });
+replyTo:data.replyTo || "",
 
-      /* =========================
-         SEND MESSAGE TO CHAT
-      ========================= */
+replyText:data.replyText || ""
 
-      io.emit(
-        "receive_message",
-        message
-      );
+});
 
-      /* =========================================
-         GPT AI ONLY WHEN @ai IS MENTIONED
-      ========================================= */
+/* =========================================
+   SEND TO CHAT
+========================================= */
 
-      if(
-        data.text
-        .toLowerCase()
-        .includes("@ai")
-      ){
+io.emit(
+"receive_message",
+message
+);
 
-        try {
+/* =========================================
+   AI RESPONSE
+========================================= */
 
-          const cleanedText =
-          data.text.replace(
-            /@ai/gi,
-            ""
-          );
+if(
+data.text
+.toLowerCase()
+.includes("@ai")
+){
 
-          const completion =
-          await openai.chat.completions.create({
+try {
 
-            model:"gpt-4.1-mini",
+const cleanedText =
+data.text
+.replace(/@ai/gi,"")
+.trim();
 
-            messages:[
+const completion =
+await openai.chat.completions.create({
 
-              {
-                role:"system",
+model:"gpt-4.1-mini",
 
-                content:`
+messages:[
+
+{
+role:"system",
+
+content:`
 You are Swaply AI.
 
-You are a smart AI marketplace assistant.
+You are a marketplace assistant.
 
-You help users:
-- buy items
-- sell items
+Help users:
 - negotiate prices
-- understand marketplace features
+- buy products
+- sell products
+- answer marketplace questions
 
 Rules:
 - keep replies short
+- be smart
 - be friendly
-- be modern
-- be professional
-- never say you are ChatGPT
 - never mention OpenAI
+- never mention ChatGPT
 `
-              },
+},
 
-              {
-                role:"user",
+{
+role:"user",
 
-                content:cleanedText
-              }
+content:cleanedText
+}
 
-            ],
+],
 
-            temperature:0.7,
+temperature:0.7,
 
-            max_tokens:120
+max_tokens:120
 
-          });
+});
 
-          const aiReply =
-          completion.choices[0]
-          .message.content;
+const aiReply =
+completion.choices[0]
+.message.content;
 
-          /* =========================
-             SAVE AI MESSAGE
-          ========================= */
+/* =========================================
+   SAVE AI MESSAGE
+========================================= */
 
-          const aiMessage =
-          await Message.create({
+const aiMessage =
+await Message.create({
 
-            senderId:"AI",
+senderId:"AI",
 
-            senderName:"Swaply AI",
+senderName:"AI Assistant",
 
-            receiverId:data.senderId,
+receiverId:data.senderId,
 
-            text:aiReply,
+text:aiReply,
 
-            isAdminReply:true
+replyTo:data.senderName,
 
-          });
+replyText:data.text
 
-          /* =========================
-             SEND AI MESSAGE
-          ========================= */
+});
 
-          setTimeout(() => {
+/* =========================================
+   SEND AI MESSAGE
+========================================= */
 
-            io.emit(
-              "receive_message",
-              aiMessage
-            );
+setTimeout(() => {
 
-          },1000);
+io.emit(
+"receive_message",
+aiMessage
+);
 
-        } catch(err){
+},1000);
 
-          console.log(
-            "OPENAI ERROR:",
-            err.message
-          );
+} catch(err){
 
-        }
+console.log(
+"OPENAI ERROR:",
+err.message
+);
 
-      }
+}
 
-    } catch(err){
+}
 
-      console.log(
-        "MESSAGE ERROR:",
-        err.message
-      );
+/* =========================================
+   ADMIN TAG
+========================================= */
 
-    }
+if(
+data.text
+.toLowerCase()
+.includes("@admin")
+){
 
-  });
+const adminMessage =
+await Message.create({
 
-  /* =========================================
-     USER ONLINE
-  ========================================= */
+senderId:"ADMIN",
 
-  socket.on(
-  "user_online",
-  async userId => {
+senderName:"Admin",
 
-    try {
+receiverId:data.senderId,
 
-      await User.findByIdAndUpdate(
-        userId,
-        {
-          online:true
-        }
-      );
+text:"👑 Admin has seen your message and may respond shortly.",
 
-      io.emit(
-        "refresh_users"
-      );
+replyTo:data.senderName,
 
-    } catch(err){
+replyText:data.text
 
-      console.log(err);
+});
 
-    }
+setTimeout(() => {
 
-  });
+io.emit(
+"receive_message",
+adminMessage
+);
 
-  /* =========================================
-     LOGOUT
-  ========================================= */
+},1000);
 
-  socket.on(
-  "logout",
-  async userId => {
+}
 
-    try {
+} catch(err){
 
-      await User.findByIdAndUpdate(
-        userId,
-        {
-          online:false
-        }
-      );
+console.log(
+"MESSAGE ERROR:",
+err.message
+);
 
-      io.emit(
-        "refresh_users"
-      );
+}
 
-    } catch(err){
+});
 
-      console.log(err);
+/* =========================================
+   USER ONLINE
+========================================= */
 
-    }
+socket.on(
+"user_online",
+async userId => {
 
-  });
+try {
 
-  /* =========================================
-     DISCONNECT
-  ========================================= */
+await User.findByIdAndUpdate(
+userId,
+{
+online:true
+}
+);
 
-  socket.on(
-  "disconnect",
-  () => {
+io.emit(
+"refresh_users"
+);
 
-    console.log(
-      "🔴 User Disconnected"
-    );
+} catch(err){
 
-  });
+console.log(err);
+
+}
+
+});
+
+/* =========================================
+   LOGOUT
+========================================= */
+
+socket.on(
+"logout",
+async userId => {
+
+try {
+
+await User.findByIdAndUpdate(
+userId,
+{
+online:false
+}
+);
+
+io.emit(
+"refresh_users"
+);
+
+} catch(err){
+
+console.log(err);
+
+}
+
+});
+
+/* =========================================
+   DISCONNECT
+========================================= */
+
+socket.on(
+"disconnect",
+() => {
+
+console.log(
+"🔴 User Disconnected"
+);
+
+});
 
 });
 
@@ -991,9 +1049,9 @@ Rules:
 
 app.get("/",(req,res)=>{
 
-  res.send(
-    "🚀 Swaply Backend Running"
-  );
+res.send(
+"🚀 Swaply Backend Running"
+);
 
 });
 
@@ -1006,8 +1064,8 @@ process.env.PORT || 5000;
 
 server.listen(PORT,() => {
 
-  console.log(
-    `🚀 Server running on port ${PORT}`
-  );
+console.log(
+`🚀 Server running on port ${PORT}`
+);
 
 });
