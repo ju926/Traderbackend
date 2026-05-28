@@ -10,7 +10,7 @@ const cloudinary = require("cloudinary").v2;
 const http = require("http");
 const { Server } = require("socket.io");
 const compression = require("compression");
-const OpenAI = require("openai");
+const Groq = require("groq-sdk");
 
 const app = express();
 
@@ -23,11 +23,11 @@ const io = new Server(server, {
 });
 
 /* =========================================
-   OPENAI
+   GROQ AI
 ========================================= */
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY
 });
 
 /* =========================================
@@ -480,34 +480,6 @@ message:"Failed to fetch users"
 });
 
 /* =========================================
-   DELETE USER
-========================================= */
-
-app.delete(
-"/users/:id",
-async(req,res)=>{
-
-try {
-
-await User.findByIdAndDelete(
-req.params.id
-);
-
-res.json({
-success:true
-});
-
-} catch(err){
-
-res.status(500).json({
-message:"Delete user failed"
-});
-
-}
-
-});
-
-/* =========================================
    CREATE ITEM
 ========================================= */
 
@@ -600,41 +572,6 @@ message:"Failed to fetch items"
 });
 
 /* =========================================
-   UPDATE ITEM
-========================================= */
-
-app.put(
-"/items/:id",
-async(req,res)=>{
-
-try {
-
-const updated =
-await Item.findByIdAndUpdate(
-
-req.params.id,
-
-req.body,
-
-{
-new:true
-}
-
-);
-
-res.json(updated);
-
-} catch(err){
-
-res.status(500).json({
-message:"Update failed"
-});
-
-}
-
-});
-
-/* =========================================
    DELETE ITEM
 ========================================= */
 
@@ -689,76 +626,6 @@ message:"Failed"
 });
 
 /* =========================================
-   ADMIN REPLY
-========================================= */
-
-app.post(
-"/admin/reply",
-async(req,res)=>{
-
-try {
-
-const message =
-await Message.create({
-
-senderId:"ADMIN",
-
-senderName:"Admin",
-
-receiverId:req.body.receiverId,
-
-text:req.body.text,
-
-isAdminReply:true
-
-});
-
-io.emit(
-"receive_message",
-message
-);
-
-res.json(message);
-
-} catch(err){
-
-res.status(500).json({
-message:"Reply failed"
-});
-
-}
-
-});
-
-/* =========================================
-   DELETE MESSAGE
-========================================= */
-
-app.delete(
-"/messages/:id",
-async(req,res)=>{
-
-try {
-
-await Message.findByIdAndDelete(
-req.params.id
-);
-
-res.json({
-success:true
-});
-
-} catch(err){
-
-res.status(500).json({
-message:"Delete failed"
-});
-
-}
-
-});
-
-/* =========================================
    SOCKET.IO
 ========================================= */
 
@@ -778,9 +645,7 @@ async data => {
 
 try {
 
-/* =========================================
-   SAVE USER MESSAGE
-========================================= */
+/* SAVE MESSAGE */
 
 const message =
 await Message.create({
@@ -801,9 +666,7 @@ replyText:data.replyText || ""
 
 });
 
-/* =========================================
-   SEND TO CHAT
-========================================= */
+/* SEND MESSAGE */
 
 io.emit(
 "receive_message",
@@ -828,9 +691,7 @@ data.text
 .trim();
 
 const completion =
-await openai.chat.completions.create({
-
-model:"gpt-4.1-mini",
+await groq.chat.completions.create({
 
 messages:[
 
@@ -840,9 +701,7 @@ role:"system",
 content:`
 You are Swaply AI.
 
-You are a marketplace assistant.
-
-Help users:
+You help users:
 - negotiate prices
 - buy products
 - sell products
@@ -850,24 +709,24 @@ Help users:
 
 Rules:
 - keep replies short
-- be smart
-- be friendly
-- never mention OpenAI
-- never mention ChatGPT
+- smart
+- friendly
+- act like modern marketplace AI
 `
 },
 
 {
 role:"user",
-
-content:cleanedText
+content: cleanedText
 }
 
 ],
 
+model:"llama3-8b-8192",
+
 temperature:0.7,
 
-max_tokens:120
+max_tokens:150
 
 });
 
@@ -875,9 +734,7 @@ const aiReply =
 completion.choices[0]
 .message.content;
 
-/* =========================================
-   SAVE AI MESSAGE
-========================================= */
+/* SAVE AI MESSAGE */
 
 const aiMessage =
 await Message.create({
@@ -896,9 +753,7 @@ replyText:data.text
 
 });
 
-/* =========================================
-   SEND AI MESSAGE
-========================================= */
+/* SEND AI MESSAGE */
 
 setTimeout(() => {
 
@@ -912,7 +767,7 @@ aiMessage
 } catch(err){
 
 console.log(
-"OPENAI ERROR:",
+"GROQ ERROR:",
 err.message
 );
 
