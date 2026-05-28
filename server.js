@@ -12,18 +12,19 @@ const path = require("path");
 const fs = require("fs");
 
 const app = express();
+
 const server = http.createServer(app);
 
 const io = new Server(server, {
-cors: {
-origin: "*",
-methods: ["GET", "POST"]
+cors:{
+origin:"*",
+methods:["GET","POST"]
 }
 });
 
-/* ======================
+/* =========================
 CONFIG
-====================== */
+========================= */
 
 const PORT =
 process.env.PORT || 5000;
@@ -31,9 +32,9 @@ process.env.PORT || 5000;
 const JWT_SECRET =
 process.env.JWT_SECRET || "swaplysecret";
 
-/* ======================
+/* =========================
 MIDDLEWARE
-====================== */
+========================= */
 
 app.use(cors());
 
@@ -46,14 +47,16 @@ extended:true,
 limit:"50mb"
 }));
 
-app.use("/uploads",
+app.use(
+"/uploads",
 express.static(
-path.join(__dirname, "uploads")
-));
+path.join(__dirname,"uploads")
+)
+);
 
-/* ======================
-UPLOADS FOLDER
-====================== */
+/* =========================
+UPLOAD FOLDER
+========================= */
 
 if(!fs.existsSync("uploads")){
 
@@ -61,9 +64,9 @@ fs.mkdirSync("uploads");
 
 }
 
-/* ======================
+/* =========================
 MONGODB
-====================== */
+========================= */
 
 mongoose.connect(
 process.env.MONGO_URI
@@ -79,9 +82,9 @@ console.log(err);
 
 });
 
-/* ======================
+/* =========================
 SCHEMAS
-====================== */
+========================= */
 
 const userSchema =
 new mongoose.Schema({
@@ -106,6 +109,18 @@ required:true
 avatar:{
 type:String,
 default:""
+},
+
+bio:{
+type:String,
+default:""
+},
+
+followers:[String],
+
+verified:{
+type:Boolean,
+default:false
 },
 
 role:{
@@ -139,7 +154,21 @@ sellerPhone:String,
 
 sellerName:String,
 
+sellerId:String,
+
 image:String,
+
+likes:[String],
+
+views:{
+type:Number,
+default:0
+},
+
+featured:{
+type:Boolean,
+default:false
+},
 
 createdAt:{
 type:Date,
@@ -155,6 +184,12 @@ username:String,
 
 message:String,
 
+senderId:String,
+
+receiverId:String,
+
+roomId:String,
+
 admin:{
 type:Boolean,
 default:false
@@ -165,13 +200,80 @@ type:Boolean,
 default:false
 },
 
-replyTo:String,
+replyTo:{
+type:Object,
+default:null
+},
+
+image:{
+type:String,
+default:""
+},
 
 time:String,
 
 createdAt:{
 type:Date,
 default:Date.now
+}
+
+});
+
+const notificationSchema =
+new mongoose.Schema({
+
+userId:String,
+
+text:String,
+
+read:{
+type:Boolean,
+default:false
+},
+
+createdAt:{
+type:Date,
+default:Date.now
+}
+
+});
+
+const offerSchema =
+new mongoose.Schema({
+
+itemId:String,
+
+buyerId:String,
+
+sellerId:String,
+
+amount:String,
+
+status:{
+type:String,
+default:"pending"
+},
+
+createdAt:{
+type:Date,
+default:Date.now
+}
+
+});
+
+const storySchema =
+new mongoose.Schema({
+
+userId:String,
+
+image:String,
+
+text:String,
+
+createdAt:{
+type:Date,
+default:Date.now,
+expires:86400
 }
 
 });
@@ -194,9 +296,27 @@ mongoose.model(
 messageSchema
 );
 
-/* ======================
+const Notification =
+mongoose.model(
+"Notification",
+notificationSchema
+);
+
+const Offer =
+mongoose.model(
+"Offer",
+offerSchema
+);
+
+const Story =
+mongoose.model(
+"Story",
+storySchema
+);
+
+/* =========================
 MULTER
-====================== */
+========================= */
 
 const storage =
 multer.diskStorage({
@@ -224,9 +344,9 @@ multer({
 storage
 });
 
-/* ======================
-AUTH MIDDLEWARE
-====================== */
+/* =========================
+AUTH
+========================= */
 
 function auth(req,res,next){
 
@@ -263,9 +383,9 @@ message:"Invalid token"
 
 }
 
-/* ======================
+/* =========================
 REGISTER
-====================== */
+========================= */
 
 app.post(
 "/register",
@@ -279,7 +399,7 @@ email,
 password
 } = req.body;
 
-const existingUser =
+const existing =
 await User.findOne({
 $or:[
 {email},
@@ -287,7 +407,7 @@ $or:[
 ]
 });
 
-if(existingUser){
+if(existing){
 
 return res.status(400).json({
 message:"User already exists"
@@ -350,9 +470,9 @@ message:"Server error"
 }
 );
 
-/* ======================
+/* =========================
 LOGIN
-====================== */
+========================= */
 
 app.post(
 "/login",
@@ -392,12 +512,22 @@ message:"Invalid credentials"
 
 }
 
+const isAdmin =
+
+email === "admin@swaply.com"
+
+&&
+
+password === "JULIAN254";
+
 const token =
 jwt.sign({
 
 id:user._id,
+
 username:user.username,
-role:user.role
+
+role:isAdmin ? "admin" : user.role
 
 },
 JWT_SECRET
@@ -411,8 +541,9 @@ user:{
 id:user._id,
 username:user.username,
 email:user.email,
-role:user.role,
-avatar:user.avatar
+role:isAdmin ? "admin" : user.role,
+avatar:user.avatar,
+verified:user.verified
 }
 
 });
@@ -430,9 +561,9 @@ message:"Server error"
 }
 );
 
-/* ======================
+/* =========================
 UPLOAD ITEM
-====================== */
+========================= */
 
 app.post(
 "/upload",
@@ -460,6 +591,8 @@ sellerPhone:req.body.sellerPhone,
 
 sellerName:req.body.sellerName,
 
+sellerId:req.body.sellerId,
+
 image:req.file
 ?
 `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`
@@ -469,8 +602,6 @@ image:req.file
 });
 
 await item.save();
-
-/* REALTIME */
 
 io.emit(
 "newItem",
@@ -495,9 +626,9 @@ message:"Upload failed"
 }
 );
 
-/* ======================
+/* =========================
 GET ITEMS
-====================== */
+========================= */
 
 app.get(
 "/items",
@@ -526,9 +657,120 @@ message:"Server error"
 }
 );
 
-/* ======================
+/* =========================
+SINGLE ITEM
+========================= */
+
+app.get(
+"/items/:id",
+async(req,res) => {
+
+try{
+
+const item =
+await Item.findById(
+req.params.id
+);
+
+if(item){
+
+item.views += 1;
+
+await item.save();
+}
+
+res.json(item);
+
+}catch(err){
+
+console.log(err);
+
+res.status(500).json({
+message:"Server error"
+});
+
+}
+
+}
+);
+
+/* =========================
+LIKE ITEM
+========================= */
+
+app.post(
+"/items/:id/like",
+async(req,res) => {
+
+try{
+
+const item =
+await Item.findById(
+req.params.id
+);
+
+if(
+!item.likes.includes(
+req.body.userId
+)
+){
+
+item.likes.push(
+req.body.userId
+);
+
+}
+
+await item.save();
+
+res.json(item);
+
+}catch(err){
+
+console.log(err);
+
+res.status(500).json({
+message:"Like failed"
+});
+
+}
+
+}
+);
+
+/* =========================
+OFFERS
+========================= */
+
+app.post(
+"/offers",
+async(req,res) => {
+
+try{
+
+const offer =
+new Offer(req.body);
+
+await offer.save();
+
+res.json(offer);
+
+}catch(err){
+
+console.log(err);
+
+res.status(500).json({
+message:"Offer failed"
+});
+
+}
+
+}
+);
+
+/* =========================
 GET USERS
-====================== */
+========================= */
 
 app.get(
 "/users",
@@ -555,9 +797,41 @@ message:"Server error"
 }
 );
 
-/* ======================
+/* =========================
+GET MESSAGES
+========================= */
+
+app.get(
+"/messages",
+async(req,res) => {
+
+try{
+
+const messages =
+await Message.find()
+.sort({
+createdAt:1
+})
+.limit(500);
+
+res.json(messages);
+
+}catch(err){
+
+console.log(err);
+
+res.status(500).json({
+message:"Server error"
+});
+
+}
+
+}
+);
+
+/* =========================
 DELETE USER
-====================== */
+========================= */
 
 app.delete(
 "/users/:id",
@@ -586,9 +860,9 @@ message:"Delete failed"
 }
 );
 
-/* ======================
+/* =========================
 DELETE ITEM
-====================== */
+========================= */
 
 app.delete(
 "/items/:id",
@@ -617,41 +891,9 @@ message:"Delete failed"
 }
 );
 
-/* ======================
-MESSAGES
-====================== */
-
-app.get(
-"/messages",
-async(req,res) => {
-
-try{
-
-const messages =
-await Message.find()
-.sort({
-createdAt:1
-})
-.limit(300);
-
-res.json(messages);
-
-}catch(err){
-
-console.log(err);
-
-res.status(500).json({
-message:"Server error"
-});
-
-}
-
-}
-);
-
-/* ======================
+/* =========================
 DELETE MESSAGE
-====================== */
+========================= */
 
 app.delete(
 "/messages/:id",
@@ -664,7 +906,7 @@ req.params.id
 );
 
 res.json({
-message:"Message deleted"
+message:"Deleted"
 });
 
 }catch(err){
@@ -680,15 +922,15 @@ message:"Delete failed"
 }
 );
 
-/* ======================
+/* =========================
 ONLINE USERS
-====================== */
+========================= */
 
 let onlineUsers = [];
 
-/* ======================
-SOCKET
-====================== */
+/* =========================
+SOCKET IO
+========================= */
 
 io.on(
 "connection",
@@ -718,6 +960,17 @@ onlineUsers
 }
 );
 
+/* JOIN ROOM */
+
+socket.on(
+"joinRoom",
+roomId => {
+
+socket.join(roomId);
+
+}
+);
+
 /* SEND MESSAGE */
 
 socket.on(
@@ -726,35 +979,91 @@ async(data) => {
 
 try{
 
-const message =
+const msg =
 new Message({
 
 username:data.username,
 
 message:data.message,
 
+senderId:data.senderId,
+
+receiverId:data.receiverId,
+
+roomId:data.roomId,
+
+replyTo:data.replyTo,
+
 admin:data.admin || false,
 
 ai:data.ai || false,
 
-replyTo:data.replyTo || "",
+image:data.image || "",
 
 time:data.time
 
 });
 
-await message.save();
+await msg.save();
+
+/* COMMUNITY */
+
+if(!data.roomId){
 
 io.emit(
 "receiveMessage",
-message
+msg
 );
+
+}
+
+/* PRIVATE ROOM */
+
+else{
+
+io.to(data.roomId).emit(
+"receivePrivateMessage",
+msg
+);
+
+}
+
+/* NOTIFICATION */
+
+if(data.receiverId){
+
+const notification =
+new Notification({
+
+userId:data.receiverId,
+
+text:`${data.username} sent you a message`
+
+});
+
+await notification.save();
+
+}
 
 }catch(err){
 
 console.log(err);
 
 }
+
+}
+);
+
+/* TYPING */
+
+socket.on(
+"typing",
+username => {
+
+socket.broadcast.emit(
+"userTyping",
+username
+);
 
 }
 );
@@ -767,7 +1076,7 @@ async(data) => {
 
 try{
 
-const message =
+const msg =
 new Message({
 
 username:"ADMIN",
@@ -784,11 +1093,11 @@ minute:"2-digit"
 
 });
 
-await message.save();
+await msg.save();
 
 io.emit(
 "receiveMessage",
-message
+msg
 );
 
 }catch(err){
@@ -814,19 +1123,21 @@ console.log("🔴 User Disconnected");
 }
 );
 
-/* ======================
+/* =========================
 HOME
-====================== */
+========================= */
 
 app.get("/", (req,res) => {
 
-res.send("🚀 Swaply Backend Running");
+res.send(
+"🚀 Swaply Backend Running"
+);
 
 });
 
-/* ======================
-START SERVER
-====================== */
+/* =========================
+START
+========================= */
 
 server.listen(PORT, () => {
 
