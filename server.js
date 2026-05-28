@@ -782,7 +782,7 @@ io.on("connection", socket => {
       });
 
       /* =========================
-         SEND MESSAGE
+         SEND MESSAGE TO CHAT
       ========================= */
 
       io.emit(
@@ -791,12 +791,22 @@ io.on("connection", socket => {
       );
 
       /* =========================================
-         GPT AI CHAT
+         GPT AI ONLY WHEN @ai IS MENTIONED
       ========================================= */
 
-      if(data.isChatAI){
+      if(
+        data.text
+        .toLowerCase()
+        .includes("@ai")
+      ){
 
         try {
+
+          const cleanedText =
+          data.text.replace(
+            /@ai/gi,
+            ""
+          );
 
           const completion =
           await openai.chat.completions.create({
@@ -832,7 +842,7 @@ Rules:
               {
                 role:"user",
 
-                content:data.text
+                content:cleanedText
               }
 
             ],
