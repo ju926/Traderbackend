@@ -1,7 +1,3 @@
-/* =========================================
-   SWAPLY BACKEND PRO MAX
-========================================= */
-
 require("dotenv").config();
 
 const express = require("express");
@@ -14,6 +10,7 @@ const cloudinary = require("cloudinary").v2;
 const http = require("http");
 const { Server } = require("socket.io");
 const compression = require("compression");
+const OpenAI = require("openai");
 
 const app = express();
 
@@ -25,8 +22,22 @@ const io = new Server(server, {
   }
 });
 
+/* =========================================
+   OPENAI
+========================================= */
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+/* =========================================
+   MIDDLEWARE
+========================================= */
+
 app.use(cors());
+
 app.use(express.json());
+
 app.use(compression());
 
 /* =========================================
@@ -34,18 +45,27 @@ app.use(compression());
 ========================================= */
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
+
+  cloud_name:
+  process.env.CLOUDINARY_CLOUD_NAME,
+
+  api_key:
+  process.env.CLOUDINARY_API_KEY,
+
+  api_secret:
+  process.env.CLOUDINARY_API_SECRET
+
 });
 
 /* =========================================
    MULTER
 ========================================= */
 
-const storage = multer.memoryStorage();
+const storage =
+multer.memoryStorage();
 
-const upload = multer({
+const upload =
+multer({
   storage
 });
 
@@ -53,19 +73,33 @@ const upload = multer({
    DATABASE
 ========================================= */
 
-mongoose.connect(process.env.MONGO_URL)
+mongoose.connect(
+  process.env.MONGO_URL
+)
+
 .then(() => {
-  console.log("✅ MongoDB Connected");
+
+  console.log(
+    "✅ MongoDB Connected"
+  );
+
 })
+
 .catch(err => {
-  console.log("❌ MongoDB Error:", err);
+
+  console.log(
+    "❌ MongoDB Error:",
+    err
+  );
+
 });
 
 /* =========================================
    MODELS
 ========================================= */
 
-const User = mongoose.model("User", {
+const User =
+mongoose.model("User", {
 
   username: String,
 
@@ -74,29 +108,42 @@ const User = mongoose.model("User", {
   password: String,
 
   avatar: {
+
     type: String,
+
     default:
-      "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+    "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+
   },
 
   online: {
+
     type: Boolean,
+
     default: false
+
   },
 
   isAdmin: {
+
     type: Boolean,
+
     default: false
+
   },
 
   createdAt: {
+
     type: Date,
+
     default: Date.now
+
   }
 
 });
 
-const Item = mongoose.model("Item", {
+const Item =
+mongoose.model("Item", {
 
   name: String,
 
@@ -115,13 +162,17 @@ const Item = mongoose.model("Item", {
   sellerPhone: String,
 
   createdAt: {
+
     type: Date,
+
     default: Date.now
+
   }
 
 });
 
-const Message = mongoose.model("Message", {
+const Message =
+mongoose.model("Message", {
 
   senderId: String,
 
@@ -134,36 +185,45 @@ const Message = mongoose.model("Message", {
   image: String,
 
   isAdminReply: {
+
     type: Boolean,
+
     default: false
+
   },
 
   createdAt: {
+
     type: Date,
+
     default: Date.now
+
   }
 
 });
 
 /* =========================================
-   JWT AUTH
+   AUTH
 ========================================= */
 
-function auth(req, res, next) {
+function auth(req,res,next){
 
   try {
 
-    const token = req.headers.authorization;
+    const token =
+    req.headers.authorization;
 
-    if (!token) {
+    if(!token){
 
-      return res.status(401).json({
-        message: "No token"
+      return res.status(401)
+      .json({
+        message:"No token"
       });
 
     }
 
-    const verified = jwt.verify(
+    const verified =
+    jwt.verify(
       token,
       process.env.JWT_SECRET
     );
@@ -172,10 +232,10 @@ function auth(req, res, next) {
 
     next();
 
-  } catch(err) {
+  } catch(err){
 
     res.status(401).json({
-      message: "Invalid token"
+      message:"Invalid token"
     });
 
   }
@@ -186,7 +246,9 @@ function auth(req, res, next) {
    REGISTER
 ========================================= */
 
-app.post("/register", async (req, res) => {
+app.post(
+"/register",
+async(req,res)=>{
 
   try {
 
@@ -197,39 +259,48 @@ app.post("/register", async (req, res) => {
     } = req.body;
 
     const existing =
-      await User.findOne({ email });
+    await User.findOne({
+      email
+    });
 
-    if (existing) {
+    if(existing){
 
-      return res.status(400).json({
-        message: "User already exists"
+      return res.status(400)
+      .json({
+        message:"User already exists"
       });
 
     }
 
     const hashed =
-      await bcrypt.hash(password, 10);
+    await bcrypt.hash(
+      password,
+      10
+    );
 
     const user =
-      await User.create({
+    await User.create({
 
-        username,
+      username,
 
-        email,
+      email,
 
-        password: hashed
+      password: hashed
 
-      });
-
-    res.json({
-      success: true,
-      user
     });
 
-  } catch(err) {
+    res.json({
+
+      success:true,
+
+      user
+
+    });
+
+  } catch(err){
 
     res.status(500).json({
-      message: "Registration failed"
+      message:"Registration failed"
     });
 
   }
@@ -240,7 +311,9 @@ app.post("/register", async (req, res) => {
    LOGIN
 ========================================= */
 
-app.post("/login", async (req, res) => {
+app.post(
+"/login",
+async(req,res)=>{
 
   try {
 
@@ -250,26 +323,30 @@ app.post("/login", async (req, res) => {
     } = req.body;
 
     const user =
-      await User.findOne({ email });
+    await User.findOne({
+      email
+    });
 
-    if (!user) {
+    if(!user){
 
-      return res.status(401).json({
-        message: "Invalid credentials"
+      return res.status(401)
+      .json({
+        message:"Invalid credentials"
       });
 
     }
 
     const valid =
-      await bcrypt.compare(
-        password,
-        user.password
-      );
+    await bcrypt.compare(
+      password,
+      user.password
+    );
 
-    if (!valid) {
+    if(!valid){
 
-      return res.status(401).json({
-        message: "Invalid credentials"
+      return res.status(401)
+      .json({
+        message:"Invalid credentials"
       });
 
     }
@@ -278,45 +355,49 @@ app.post("/login", async (req, res) => {
 
     await user.save();
 
-    const token = jwt.sign({
+    const token =
+    jwt.sign({
 
-      id: user._id,
-      email: user.email,
-      username: user.username,
-      isAdmin: user.isAdmin
+      id:user._id,
+
+      email:user.email,
+
+      username:user.username,
+
+      isAdmin:user.isAdmin
 
     },
     process.env.JWT_SECRET,
     {
-      expiresIn: "30d"
+      expiresIn:"30d"
     });
 
     res.json({
 
       token,
 
-      user: {
+      user:{
 
-        id: user._id,
+        id:user._id,
 
-        username: user.username,
+        username:user.username,
 
-        email: user.email,
+        email:user.email,
 
-        avatar: user.avatar,
+        avatar:user.avatar,
 
-        online: user.online,
+        online:user.online,
 
-        isAdmin: user.isAdmin
+        isAdmin:user.isAdmin
 
       }
 
     });
 
-  } catch(err) {
+  } catch(err){
 
     res.status(500).json({
-      message: "Login failed"
+      message:"Login failed"
     });
 
   }
@@ -327,25 +408,28 @@ app.post("/login", async (req, res) => {
    LOGOUT
 ========================================= */
 
-app.post("/logout", auth, async (req, res) => {
+app.post(
+"/logout",
+auth,
+async(req,res)=>{
 
   try {
 
     await User.findByIdAndUpdate(
       req.user.id,
       {
-        online: false
+        online:false
       }
     );
 
     res.json({
-      success: true
+      success:true
     });
 
-  } catch(err) {
+  } catch(err){
 
     res.status(500).json({
-      message: "Logout failed"
+      message:"Logout failed"
     });
 
   }
@@ -356,21 +440,23 @@ app.post("/logout", auth, async (req, res) => {
    USERS
 ========================================= */
 
-app.get("/users", async (req, res) => {
+app.get(
+"/users",
+async(req,res)=>{
 
   try {
 
     const users =
-      await User.find()
-      .select("-password")
-      .sort({ online: -1 });
+    await User.find()
+    .select("-password")
+    .sort({online:-1});
 
     res.json(users);
 
-  } catch(err) {
+  } catch(err){
 
     res.status(500).json({
-      message: "Failed to fetch users"
+      message:"Failed to fetch users"
     });
 
   }
@@ -381,7 +467,9 @@ app.get("/users", async (req, res) => {
    DELETE USER
 ========================================= */
 
-app.delete("/users/:id", async (req, res) => {
+app.delete(
+"/users/:id",
+async(req,res)=>{
 
   try {
 
@@ -390,13 +478,13 @@ app.delete("/users/:id", async (req, res) => {
     );
 
     res.json({
-      success: true
+      success:true
     });
 
-  } catch(err) {
+  } catch(err){
 
     res.status(500).json({
-      message: "Delete user failed"
+      message:"Delete user failed"
     });
 
   }
@@ -408,57 +496,61 @@ app.delete("/users/:id", async (req, res) => {
 ========================================= */
 
 app.post(
-  "/upload",
-  upload.single("image"),
-  async (req, res) => {
+"/upload",
+upload.single("image"),
+async(req,res)=>{
 
   try {
 
     let imageUrl = "";
 
-    if (req.file) {
+    if(req.file){
 
       const base64 =
-        `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+      `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
       const uploaded =
-        await cloudinary.uploader.upload(base64, {
-          folder: "swaply"
-        });
+      await cloudinary
+      .uploader.upload(base64,{
 
-      imageUrl = uploaded.secure_url;
+        folder:"swaply"
+
+      });
+
+      imageUrl =
+      uploaded.secure_url;
 
     }
 
     const item =
-      await Item.create({
+    await Item.create({
 
-        name: req.body.name,
+      name:req.body.name,
 
-        description: req.body.description,
+      description:req.body.description,
 
-        category: req.body.category,
+      category:req.body.category,
 
-        price: req.body.price,
+      price:req.body.price,
 
-        wanted: req.body.wanted,
+      wanted:req.body.wanted,
 
-        sellerName: req.body.sellerName,
+      sellerName:req.body.sellerName,
 
-        sellerPhone: req.body.sellerPhone,
+      sellerPhone:req.body.sellerPhone,
 
-        image: imageUrl
+      image:imageUrl
 
-      });
+    });
 
     res.json(item);
 
-  } catch(err) {
+  } catch(err){
 
     console.log(err);
 
     res.status(500).json({
-      message: "Upload failed"
+      message:"Upload failed"
     });
 
   }
@@ -469,20 +561,22 @@ app.post(
    GET ITEMS
 ========================================= */
 
-app.get("/items", async (req, res) => {
+app.get(
+"/items",
+async(req,res)=>{
 
   try {
 
     const items =
-      await Item.find()
-      .sort({ createdAt: -1 });
+    await Item.find()
+    .sort({createdAt:-1});
 
     res.json(items);
 
-  } catch(err) {
+  } catch(err){
 
     res.status(500).json({
-      message: "Failed to fetch items"
+      message:"Failed to fetch items"
     });
 
   }
@@ -493,25 +587,31 @@ app.get("/items", async (req, res) => {
    UPDATE ITEM
 ========================================= */
 
-app.put("/items/:id", async (req, res) => {
+app.put(
+"/items/:id",
+async(req,res)=>{
 
   try {
 
     const updated =
-      await Item.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        {
-          new: true
-        }
-      );
+    await Item.findByIdAndUpdate(
+
+      req.params.id,
+
+      req.body,
+
+      {
+        new:true
+      }
+
+    );
 
     res.json(updated);
 
-  } catch(err) {
+  } catch(err){
 
     res.status(500).json({
-      message: "Update failed"
+      message:"Update failed"
     });
 
   }
@@ -522,7 +622,9 @@ app.put("/items/:id", async (req, res) => {
    DELETE ITEM
 ========================================= */
 
-app.delete("/items/:id", async (req, res) => {
+app.delete(
+"/items/:id",
+async(req,res)=>{
 
   try {
 
@@ -531,13 +633,13 @@ app.delete("/items/:id", async (req, res) => {
     );
 
     res.json({
-      success: true
+      success:true
     });
 
-  } catch(err) {
+  } catch(err){
 
     res.status(500).json({
-      message: "Delete failed"
+      message:"Delete failed"
     });
 
   }
@@ -548,20 +650,22 @@ app.delete("/items/:id", async (req, res) => {
    GET MESSAGES
 ========================================= */
 
-app.get("/messages", async (req, res) => {
+app.get(
+"/messages",
+async(req,res)=>{
 
   try {
 
     const messages =
-      await Message.find()
-      .sort({ createdAt: 1 });
+    await Message.find()
+    .sort({createdAt:1});
 
     res.json(messages);
 
-  } catch(err) {
+  } catch(err){
 
     res.status(500).json({
-      message: "Failed to fetch messages"
+      message:"Failed"
     });
 
   }
@@ -569,27 +673,29 @@ app.get("/messages", async (req, res) => {
 });
 
 /* =========================================
-   ADMIN REPLY MESSAGE
+   ADMIN REPLY
 ========================================= */
 
-app.post("/admin/reply", async (req, res) => {
+app.post(
+"/admin/reply",
+async(req,res)=>{
 
   try {
 
     const message =
-      await Message.create({
+    await Message.create({
 
-        senderId: "ADMIN",
+      senderId:"ADMIN",
 
-        senderName: "Swaply Admin",
+      senderName:"Swaply Admin",
 
-        receiverId: req.body.receiverId,
+      receiverId:req.body.receiverId,
 
-        text: req.body.text,
+      text:req.body.text,
 
-        isAdminReply: true
+      isAdminReply:true
 
-      });
+    });
 
     io.emit(
       "receive_message",
@@ -598,10 +704,10 @@ app.post("/admin/reply", async (req, res) => {
 
     res.json(message);
 
-  } catch(err) {
+  } catch(err){
 
     res.status(500).json({
-      message: "Reply failed"
+      message:"Reply failed"
     });
 
   }
@@ -612,7 +718,9 @@ app.post("/admin/reply", async (req, res) => {
    DELETE MESSAGE
 ========================================= */
 
-app.delete("/messages/:id", async (req, res) => {
+app.delete(
+"/messages/:id",
+async(req,res)=>{
 
   try {
 
@@ -621,13 +729,13 @@ app.delete("/messages/:id", async (req, res) => {
     );
 
     res.json({
-      success: true
+      success:true
     });
 
-  } catch(err) {
+  } catch(err){
 
     res.status(500).json({
-      message: "Delete failed"
+      message:"Delete failed"
     });
 
   }
@@ -640,61 +748,228 @@ app.delete("/messages/:id", async (req, res) => {
 
 io.on("connection", socket => {
 
-  console.log("🟢 User Connected");
+  console.log(
+    "🟢 User Connected"
+  );
 
-  socket.on("send_message", async data => {
+  /* =========================================
+     SEND MESSAGE
+  ========================================= */
 
-    const message =
+  socket.on(
+  "send_message",
+  async data => {
+
+    try {
+
+      /* =========================
+         SAVE USER MESSAGE
+      ========================= */
+
+      const message =
       await Message.create({
 
-        senderId: data.senderId,
+        senderId:data.senderId,
 
-        senderName: data.senderName,
+        senderName:data.senderName,
 
-        receiverId: data.receiverId,
+        receiverId:data.receiverId,
 
-        text: data.text,
+        text:data.text,
 
-        image: data.image || ""
+        image:data.image || ""
 
       });
 
-    io.emit(
-      "receive_message",
-      message
-    );
+      /* =========================
+         SEND MESSAGE
+      ========================= */
 
-  });
+      io.emit(
+        "receive_message",
+        message
+      );
 
-  socket.on("user_online", async userId => {
+      /* =========================================
+         GPT AI CHAT
+      ========================================= */
 
-    await User.findByIdAndUpdate(
-      userId,
-      {
-        online: true
+      if(data.isChatAI){
+
+        try {
+
+          const completion =
+          await openai.chat.completions.create({
+
+            model:"gpt-4.1-mini",
+
+            messages:[
+
+              {
+                role:"system",
+
+                content:`
+You are Swaply AI.
+
+You are a smart AI marketplace assistant.
+
+You help users:
+- buy items
+- sell items
+- negotiate prices
+- understand marketplace features
+
+Rules:
+- keep replies short
+- be friendly
+- be modern
+- be professional
+- never say you are ChatGPT
+- never mention OpenAI
+`
+              },
+
+              {
+                role:"user",
+
+                content:data.text
+              }
+
+            ],
+
+            temperature:0.7,
+
+            max_tokens:120
+
+          });
+
+          const aiReply =
+          completion.choices[0]
+          .message.content;
+
+          /* =========================
+             SAVE AI MESSAGE
+          ========================= */
+
+          const aiMessage =
+          await Message.create({
+
+            senderId:"AI",
+
+            senderName:"Swaply AI",
+
+            receiverId:data.senderId,
+
+            text:aiReply,
+
+            isAdminReply:true
+
+          });
+
+          /* =========================
+             SEND AI MESSAGE
+          ========================= */
+
+          setTimeout(() => {
+
+            io.emit(
+              "receive_message",
+              aiMessage
+            );
+
+          },1000);
+
+        } catch(err){
+
+          console.log(
+            "OPENAI ERROR:",
+            err.message
+          );
+
+        }
+
       }
-    );
 
-    io.emit("refresh_users");
+    } catch(err){
 
-  });
+      console.log(
+        "MESSAGE ERROR:",
+        err.message
+      );
 
-  socket.on("logout", async userId => {
-
-    await User.findByIdAndUpdate(
-      userId,
-      {
-        online: false
-      }
-    );
-
-    io.emit("refresh_users");
+    }
 
   });
 
-  socket.on("disconnect", () => {
+  /* =========================================
+     USER ONLINE
+  ========================================= */
 
-    console.log("🔴 User Disconnected");
+  socket.on(
+  "user_online",
+  async userId => {
+
+    try {
+
+      await User.findByIdAndUpdate(
+        userId,
+        {
+          online:true
+        }
+      );
+
+      io.emit(
+        "refresh_users"
+      );
+
+    } catch(err){
+
+      console.log(err);
+
+    }
+
+  });
+
+  /* =========================================
+     LOGOUT
+  ========================================= */
+
+  socket.on(
+  "logout",
+  async userId => {
+
+    try {
+
+      await User.findByIdAndUpdate(
+        userId,
+        {
+          online:false
+        }
+      );
+
+      io.emit(
+        "refresh_users"
+      );
+
+    } catch(err){
+
+      console.log(err);
+
+    }
+
+  });
+
+  /* =========================================
+     DISCONNECT
+  ========================================= */
+
+  socket.on(
+  "disconnect",
+  () => {
+
+    console.log(
+      "🔴 User Disconnected"
+    );
 
   });
 
@@ -704,9 +979,11 @@ io.on("connection", socket => {
    ROOT
 ========================================= */
 
-app.get("/", (req, res) => {
+app.get("/",(req,res)=>{
 
-  res.send("🚀 Swaply Backend Running");
+  res.send(
+    "🚀 Swaply Backend Running"
+  );
 
 });
 
@@ -717,7 +994,7 @@ app.get("/", (req, res) => {
 const PORT =
 process.env.PORT || 5000;
 
-server.listen(PORT, () => {
+server.listen(PORT,() => {
 
   console.log(
     `🚀 Server running on port ${PORT}`
