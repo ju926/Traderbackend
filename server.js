@@ -1,3 +1,7 @@
+/* =========================================
+   SWAPLY BACKEND PRO
+========================================= */
+
 require("dotenv").config();
 
 const express = require("express");
@@ -78,6 +82,16 @@ const User = mongoose.model("User", {
   online: {
     type: Boolean,
     default: false
+  },
+
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
+
+  createdAt: {
+    type: Date,
+    default: Date.now
   }
 
 });
@@ -109,11 +123,9 @@ const Item = mongoose.model("Item", {
 
 const Message = mongoose.model("Message", {
 
-  room: String,
-
-  sender: String,
-
   senderId: String,
+
+  senderName: String,
 
   receiverId: String,
 
@@ -173,9 +185,14 @@ app.post("/register", async (req, res) => {
 
   try {
 
-    const { username, email, password } = req.body;
+    const {
+      username,
+      email,
+      password
+    } = req.body;
 
-    const existing = await User.findOne({ email });
+    const existing =
+      await User.findOne({ email });
 
     if (existing) {
 
@@ -185,17 +202,19 @@ app.post("/register", async (req, res) => {
 
     }
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashed =
+      await bcrypt.hash(password, 10);
 
-    const user = await User.create({
+    const user =
+      await User.create({
 
-      username,
+        username,
 
-      email,
+        email,
 
-      password: hashed
+        password: hashed
 
-    });
+      });
 
     res.json({
       success: true,
@@ -220,9 +239,13 @@ app.post("/login", async (req, res) => {
 
   try {
 
-    const { email, password } = req.body;
+    const {
+      email,
+      password
+    } = req.body;
 
-    const user = await User.findOne({ email });
+    const user =
+      await User.findOne({ email });
 
     if (!user) {
 
@@ -232,10 +255,11 @@ app.post("/login", async (req, res) => {
 
     }
 
-    const valid = await bcrypt.compare(
-      password,
-      user.password
-    );
+    const valid =
+      await bcrypt.compare(
+        password,
+        user.password
+      );
 
     if (!valid) {
 
@@ -245,10 +269,17 @@ app.post("/login", async (req, res) => {
 
     }
 
+    // SET ONLINE
+    user.online = true;
+
+    await user.save();
+
     const token = jwt.sign({
 
       id: user._id,
-      email: user.email
+      email: user.email,
+      username: user.username,
+      isAdmin: user.isAdmin
 
     },
     process.env.JWT_SECRET,
@@ -268,7 +299,11 @@ app.post("/login", async (req, res) => {
 
         email: user.email,
 
-        avatar: user.avatar
+        avatar: user.avatar,
+
+        online: user.online,
+
+        isAdmin: user.isAdmin
 
       }
 
@@ -278,6 +313,60 @@ app.post("/login", async (req, res) => {
 
     res.status(500).json({
       message: "Login failed"
+    });
+
+  }
+
+});
+
+/* =========================================
+   LOGOUT
+========================================= */
+
+app.post("/logout", auth, async (req, res) => {
+
+  try {
+
+    await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        online: false
+      }
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch(err) {
+
+    res.status(500).json({
+      message: "Logout failed"
+    });
+
+  }
+
+});
+
+/* =========================================
+   GET USERS
+========================================= */
+
+app.get("/users", async (req, res) => {
+
+  try {
+
+    const users =
+      await User.find()
+      .select("-password")
+      .sort({ online: -1 });
+
+    res.json(users);
+
+  } catch(err) {
+
+    res.status(500).json({
+      message: "Failed to fetch users"
     });
 
   }
@@ -311,25 +400,26 @@ app.post(
 
     }
 
-    const item = await Item.create({
+    const item =
+      await Item.create({
 
-      name: req.body.name,
+        name: req.body.name,
 
-      description: req.body.description,
+        description: req.body.description,
 
-      category: req.body.category,
+        category: req.body.category,
 
-      price: req.body.price,
+        price: req.body.price,
 
-      wanted: req.body.wanted,
+        wanted: req.body.wanted,
 
-      sellerName: req.body.sellerName,
+        sellerName: req.body.sellerName,
 
-      sellerPhone: req.body.sellerPhone,
+        sellerPhone: req.body.sellerPhone,
 
-      image: imageUrl
+        image: imageUrl
 
-    });
+      });
 
     res.json(item);
 
@@ -353,8 +443,9 @@ app.get("/items", async (req, res) => {
 
   try {
 
-    const items = await Item.find()
-    .sort({ createdAt: -1 });
+    const items =
+      await Item.find()
+      .sort({ createdAt: -1 });
 
     res.json(items);
 
@@ -369,22 +460,28 @@ app.get("/items", async (req, res) => {
 });
 
 /* =========================================
-   GET SINGLE ITEM
+   UPDATE ITEM
 ========================================= */
 
-app.get("/items/:id", async (req, res) => {
+app.put("/items/:id", async (req, res) => {
 
   try {
 
-    const item =
-    await Item.findById(req.params.id);
+    const updated =
+      await Item.findByIdAndUpdate(
+        req.params.id,
+        req.body,
+        {
+          new: true
+        }
+      );
 
-    res.json(item);
+    res.json(updated);
 
   } catch(err) {
 
     res.status(500).json({
-      message: "Failed to fetch item"
+      message: "Update failed"
     });
 
   }
@@ -399,7 +496,9 @@ app.delete("/items/:id", async (req, res) => {
 
   try {
 
-    await Item.findByIdAndDelete(req.params.id);
+    await Item.findByIdAndDelete(
+      req.params.id
+    );
 
     res.json({
       success: true
@@ -416,15 +515,16 @@ app.delete("/items/:id", async (req, res) => {
 });
 
 /* =========================================
-   CHAT MESSAGES
+   GET CHAT MESSAGES
 ========================================= */
 
 app.get("/messages", async (req, res) => {
 
   try {
 
-    const messages = await Message.find()
-    .sort({ createdAt: 1 });
+    const messages =
+      await Message.find()
+      .sort({ createdAt: 1 });
 
     res.json(messages);
 
@@ -439,6 +539,32 @@ app.get("/messages", async (req, res) => {
 });
 
 /* =========================================
+   DELETE MESSAGE
+========================================= */
+
+app.delete("/messages/:id", async (req, res) => {
+
+  try {
+
+    await Message.findByIdAndDelete(
+      req.params.id
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch(err) {
+
+    res.status(500).json({
+      message: "Delete failed"
+    });
+
+  }
+
+});
+
+/* =========================================
    SOCKET.IO LIVE CHAT
 ========================================= */
 
@@ -446,39 +572,53 @@ io.on("connection", socket => {
 
   console.log("🟢 User Connected");
 
-  socket.on("joinRoom", async(room) => {
+  socket.on("send_message", async data => {
 
-    socket.join(room);
+    const message =
+      await Message.create({
 
-    const messages =
-    await Message.find({ room })
-    .sort({ createdAt: 1 });
+        senderId: data.senderId,
 
-    socket.emit("previousMessages", messages);
+        senderName: data.senderName,
+
+        receiverId: data.receiverId,
+
+        text: data.text,
+
+        image: data.image || ""
+
+      });
+
+    io.emit(
+      "receive_message",
+      message
+    );
 
   });
 
-  socket.on("sendMessage", async(data) => {
+  socket.on("user_online", async userId => {
 
-    const message =
-    await Message.create({
+    await User.findByIdAndUpdate(
+      userId,
+      {
+        online: true
+      }
+    );
 
-      room: data.room,
+    io.emit("refresh_users");
 
-      sender: data.sender,
+  });
 
-      senderId: data.senderId || "",
+  socket.on("logout", async userId => {
 
-      receiverId: data.receiverId || "",
+    await User.findByIdAndUpdate(
+      userId,
+      {
+        online: false
+      }
+    );
 
-      text: data.message,
-
-      image: data.image || ""
-
-    });
-
-    io.to(data.room)
-    .emit("receiveMessage", message);
+    io.emit("refresh_users");
 
   });
 
@@ -504,10 +644,13 @@ app.get("/", (req, res) => {
    SERVER
 ========================================= */
 
-const PORT = process.env.PORT || 5000;
+const PORT =
+process.env.PORT || 5000;
 
 server.listen(PORT, () => {
 
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(
+    `🚀 Server running on port ${PORT}`
+  );
 
 });
