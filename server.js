@@ -1,5 +1,5 @@
 /* =========================================
-   SWAPLY BACKEND PRO
+   SWAPLY BACKEND PRO MAX
 ========================================= */
 
 require("dotenv").config();
@@ -132,6 +132,11 @@ const Message = mongoose.model("Message", {
   text: String,
 
   image: String,
+
+  isAdminReply: {
+    type: Boolean,
+    default: false
+  },
 
   createdAt: {
     type: Date,
@@ -269,7 +274,6 @@ app.post("/login", async (req, res) => {
 
     }
 
-    // SET ONLINE
     user.online = true;
 
     await user.save();
@@ -349,7 +353,7 @@ app.post("/logout", auth, async (req, res) => {
 });
 
 /* =========================================
-   GET USERS
+   USERS
 ========================================= */
 
 app.get("/users", async (req, res) => {
@@ -374,7 +378,33 @@ app.get("/users", async (req, res) => {
 });
 
 /* =========================================
-   CREATE ITEM WITH CLOUDINARY
+   DELETE USER
+========================================= */
+
+app.delete("/users/:id", async (req, res) => {
+
+  try {
+
+    await User.findByIdAndDelete(
+      req.params.id
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch(err) {
+
+    res.status(500).json({
+      message: "Delete user failed"
+    });
+
+  }
+
+});
+
+/* =========================================
+   CREATE ITEM
 ========================================= */
 
 app.post(
@@ -515,7 +545,7 @@ app.delete("/items/:id", async (req, res) => {
 });
 
 /* =========================================
-   GET CHAT MESSAGES
+   GET MESSAGES
 ========================================= */
 
 app.get("/messages", async (req, res) => {
@@ -531,7 +561,47 @@ app.get("/messages", async (req, res) => {
   } catch(err) {
 
     res.status(500).json({
-      message: "Failed"
+      message: "Failed to fetch messages"
+    });
+
+  }
+
+});
+
+/* =========================================
+   ADMIN REPLY MESSAGE
+========================================= */
+
+app.post("/admin/reply", async (req, res) => {
+
+  try {
+
+    const message =
+      await Message.create({
+
+        senderId: "ADMIN",
+
+        senderName: "Swaply Admin",
+
+        receiverId: req.body.receiverId,
+
+        text: req.body.text,
+
+        isAdminReply: true
+
+      });
+
+    io.emit(
+      "receive_message",
+      message
+    );
+
+    res.json(message);
+
+  } catch(err) {
+
+    res.status(500).json({
+      message: "Reply failed"
     });
 
   }
@@ -565,7 +635,7 @@ app.delete("/messages/:id", async (req, res) => {
 });
 
 /* =========================================
-   SOCKET.IO LIVE CHAT
+   SOCKET.IO
 ========================================= */
 
 io.on("connection", socket => {
