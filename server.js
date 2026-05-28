@@ -109,6 +109,10 @@ const Item = mongoose.model("Item", {
 
 const Message = mongoose.model("Message", {
 
+  room: String,
+
+  sender: String,
+
   senderId: String,
 
   receiverId: String,
@@ -365,6 +369,29 @@ app.get("/items", async (req, res) => {
 });
 
 /* =========================================
+   GET SINGLE ITEM
+========================================= */
+
+app.get("/items/:id", async (req, res) => {
+
+  try {
+
+    const item =
+    await Item.findById(req.params.id);
+
+    res.json(item);
+
+  } catch(err) {
+
+    res.status(500).json({
+      message: "Failed to fetch item"
+    });
+
+  }
+
+});
+
+/* =========================================
    DELETE ITEM
 ========================================= */
 
@@ -419,21 +446,39 @@ io.on("connection", socket => {
 
   console.log("🟢 User Connected");
 
-  socket.on("send_message", async data => {
+  socket.on("joinRoom", async(room) => {
 
-    const message = await Message.create({
+    socket.join(room);
 
-      senderId: data.senderId,
+    const messages =
+    await Message.find({ room })
+    .sort({ createdAt: 1 });
 
-      receiverId: data.receiverId,
+    socket.emit("previousMessages", messages);
 
-      text: data.text,
+  });
+
+  socket.on("sendMessage", async(data) => {
+
+    const message =
+    await Message.create({
+
+      room: data.room,
+
+      sender: data.sender,
+
+      senderId: data.senderId || "",
+
+      receiverId: data.receiverId || "",
+
+      text: data.message,
 
       image: data.image || ""
 
     });
 
-    io.emit("receive_message", message);
+    io.to(data.room)
+    .emit("receiveMessage", message);
 
   });
 
