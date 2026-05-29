@@ -2,29 +2,28 @@ require("dotenv").config();
 
 const express = require("express");
 const http = require("http");
-const { Server } = require("socket.io");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const { Server } = require("socket.io");
+const helmet = require("helmet");
+const compression = require("compression");
 
 const app = express();
 
 const server = http.createServer(app);
 
-const io = new Server(server, {
+const io = new Server(server,{
 cors:{
 origin:"*",
 methods:["GET","POST"]
 }
 });
 
-/* =========================
+/* =====================================
 CONFIG
-========================= */
+===================================== */
 
 const PORT =
 process.env.PORT || 5000;
@@ -32,41 +31,21 @@ process.env.PORT || 5000;
 const JWT_SECRET =
 process.env.JWT_SECRET || "swaplysecret";
 
-/* =========================
+/* =====================================
 MIDDLEWARE
-========================= */
+===================================== */
 
 app.use(cors());
 
-app.use(express.json({
-limit:"50mb"
-}));
+app.use(express.json());
 
-app.use(express.urlencoded({
-extended:true,
-limit:"50mb"
-}));
+app.use(helmet());
 
-app.use(
-"/uploads",
-express.static(
-path.join(__dirname,"uploads")
-)
-);
+app.use(compression());
 
-/* =========================
-UPLOAD FOLDER
-========================= */
-
-if(!fs.existsSync("uploads")){
-
-fs.mkdirSync("uploads");
-
-}
-
-/* =========================
+/* =====================================
 MONGODB
-========================= */
+===================================== */
 
 mongoose.connect(
 process.env.MONGO_URI
@@ -82,17 +61,16 @@ console.log(err);
 
 });
 
-/* =========================
-SCHEMAS
-========================= */
+/* =====================================
+USER SCHEMA
+===================================== */
 
 const userSchema =
 new mongoose.Schema({
 
 username:{
 type:String,
-required:true,
-unique:true
+required:true
 },
 
 email:{
@@ -116,7 +94,20 @@ type:String,
 default:""
 },
 
-followers:[String],
+location:{
+type:String,
+default:"Kenya"
+},
+
+followers:{
+type:Number,
+default:0
+},
+
+following:{
+type:Number,
+default:0
+},
 
 verified:{
 type:Boolean,
@@ -128,6 +119,11 @@ type:String,
 default:"user"
 },
 
+online:{
+type:Boolean,
+default:false
+},
+
 createdAt:{
 type:Date,
 default:Date.now
@@ -135,30 +131,43 @@ default:Date.now
 
 });
 
-const itemSchema =
+const User =
+mongoose.model(
+"User",
+userSchema
+);
+
+/* =====================================
+PRODUCT SCHEMA
+===================================== */
+
+const productSchema =
 new mongoose.Schema({
 
-name:String,
+title:String,
+
+price:String,
 
 description:String,
 
 category:String,
 
-price:String,
-
-wanted:String,
+condition:String,
 
 location:String,
 
-sellerPhone:String,
-
-sellerName:String,
+images:[String],
 
 sellerId:String,
 
-image:String,
+sellerName:String,
 
-likes:[String],
+sellerAvatar:String,
+
+likes:{
+type:Number,
+default:0
+},
 
 views:{
 type:Number,
@@ -170,12 +179,27 @@ type:Boolean,
 default:false
 },
 
+sold:{
+type:Boolean,
+default:false
+},
+
 createdAt:{
 type:Date,
 default:Date.now
 }
 
 });
+
+const Product =
+mongoose.model(
+"Product",
+productSchema
+);
+
+/* =====================================
+CHAT SCHEMA
+===================================== */
 
 const messageSchema =
 new mongoose.Schema({
@@ -184,25 +208,23 @@ username:String,
 
 message:String,
 
-senderId:String,
+avatar:String,
 
-receiverId:String,
+replyTo:Object,
 
-roomId:String,
+room:{
+type:String,
+default:"public"
+},
 
-admin:{
+isAdmin:{
 type:Boolean,
 default:false
 },
 
-ai:{
+isAI:{
 type:Boolean,
 default:false
-},
-
-replyTo:{
-type:Object,
-default:null
 },
 
 image:{
@@ -210,7 +232,10 @@ type:String,
 default:""
 },
 
-time:String,
+seen:{
+type:Boolean,
+default:false
+},
 
 createdAt:{
 type:Date,
@@ -218,6 +243,16 @@ default:Date.now
 }
 
 });
+
+const Message =
+mongoose.model(
+"Message",
+messageSchema
+);
+
+/* =====================================
+NOTIFICATION SCHEMA
+===================================== */
 
 const notificationSchema =
 new mongoose.Schema({
@@ -238,10 +273,20 @@ default:Date.now
 
 });
 
+const Notification =
+mongoose.model(
+"Notification",
+notificationSchema
+);
+
+/* =====================================
+OFFER SCHEMA
+===================================== */
+
 const offerSchema =
 new mongoose.Schema({
 
-itemId:String,
+productId:String,
 
 buyerId:String,
 
@@ -261,92 +306,15 @@ default:Date.now
 
 });
 
-const storySchema =
-new mongoose.Schema({
-
-userId:String,
-
-image:String,
-
-text:String,
-
-createdAt:{
-type:Date,
-default:Date.now,
-expires:86400
-}
-
-});
-
-const User =
-mongoose.model(
-"User",
-userSchema
-);
-
-const Item =
-mongoose.model(
-"Item",
-itemSchema
-);
-
-const Message =
-mongoose.model(
-"Message",
-messageSchema
-);
-
-const Notification =
-mongoose.model(
-"Notification",
-notificationSchema
-);
-
 const Offer =
 mongoose.model(
 "Offer",
 offerSchema
 );
 
-const Story =
-mongoose.model(
-"Story",
-storySchema
-);
-
-/* =========================
-MULTER
-========================= */
-
-const storage =
-multer.diskStorage({
-
-destination:function(req,file,cb){
-
-cb(null,"uploads/");
-
-},
-
-filename:function(req,file,cb){
-
-cb(
-null,
-Date.now() +
-path.extname(file.originalname)
-);
-
-}
-
-});
-
-const upload =
-multer({
-storage
-});
-
-/* =========================
-AUTH
-========================= */
+/* =====================================
+AUTH MIDDLEWARE
+===================================== */
 
 function auth(req,res,next){
 
@@ -356,26 +324,26 @@ req.headers.authorization;
 if(!token){
 
 return res.status(401).json({
-message:"No token"
+message:"Unauthorized"
 });
 
 }
 
 try{
 
-const decoded =
+const verified =
 jwt.verify(
 token,
 JWT_SECRET
 );
 
-req.user = decoded;
+req.user = verified;
 
 next();
 
 }catch(err){
 
-res.status(401).json({
+return res.status(401).json({
 message:"Invalid token"
 });
 
@@ -383,9 +351,9 @@ message:"Invalid token"
 
 }
 
-/* =========================
+/* =====================================
 REGISTER
-========================= */
+===================================== */
 
 app.post(
 "/register",
@@ -401,16 +369,13 @@ password
 
 const existing =
 await User.findOne({
-$or:[
-{email},
-{username}
-]
+email
 });
 
 if(existing){
 
 return res.status(400).json({
-message:"User already exists"
+message:"Email already exists"
 });
 
 }
@@ -421,16 +386,27 @@ password,
 10
 );
 
+const isAdmin =
+email === process.env.ADMIN_EMAIL
+&&
+password === process.env.ADMIN_PASSWORD;
+
 const user =
-new User({
+await User.create({
 
 username,
+
 email,
-password:hashed
+
+password:hashed,
+
+role:isAdmin
+? "admin"
+: "user",
+
+verified:isAdmin
 
 });
-
-await user.save();
 
 const token =
 jwt.sign({
@@ -447,13 +423,7 @@ res.json({
 
 token,
 
-user:{
-id:user._id,
-username:user.username,
-email:user.email,
-role:user.role,
-avatar:user.avatar
-}
+user
 
 });
 
@@ -470,9 +440,9 @@ message:"Server error"
 }
 );
 
-/* =========================
+/* =====================================
 LOGIN
-========================= */
+===================================== */
 
 app.post(
 "/login",
@@ -484,6 +454,40 @@ const {
 email,
 password
 } = req.body;
+
+/* ADMIN LOGIN */
+
+if(
+email === process.env.ADMIN_EMAIL
+&&
+password === process.env.ADMIN_PASSWORD
+){
+
+const token =
+jwt.sign({
+
+id:"adminid",
+username:"Admin",
+role:"admin"
+
+},
+JWT_SECRET
+);
+
+return res.json({
+
+token,
+
+user:{
+id:"adminid",
+username:"Admin",
+role:"admin",
+verified:true
+}
+
+});
+
+}
 
 const user =
 await User.findOne({
@@ -512,22 +516,12 @@ message:"Invalid credentials"
 
 }
 
-const isAdmin =
-
-email === "admin@swaply.com"
-
-&&
-
-password === "JULIAN254";
-
 const token =
 jwt.sign({
 
 id:user._id,
-
 username:user.username,
-
-role:isAdmin ? "admin" : user.role
+role:user.role
 
 },
 JWT_SECRET
@@ -537,14 +531,7 @@ res.json({
 
 token,
 
-user:{
-id:user._id,
-username:user.username,
-email:user.email,
-role:isAdmin ? "admin" : user.role,
-avatar:user.avatar,
-verified:user.verified
-}
+user
 
 });
 
@@ -561,57 +548,60 @@ message:"Server error"
 }
 );
 
-/* =========================
-UPLOAD ITEM
-========================= */
+/* =====================================
+PROFILE
+===================================== */
+
+app.get(
+"/profile/:id",
+async(req,res) => {
+
+const user =
+await User.findById(
+req.params.id
+);
+
+res.json(user);
+
+}
+);
+
+/* =====================================
+UPDATE PROFILE
+===================================== */
+
+app.put(
+"/profile/:id",
+async(req,res) => {
+
+const updated =
+await User.findByIdAndUpdate(
+req.params.id,
+req.body,
+{ new:true }
+);
+
+res.json(updated);
+
+}
+);
+
+/* =====================================
+UPLOAD PRODUCT
+===================================== */
 
 app.post(
-"/upload",
-upload.single("image"),
+"/products",
 async(req,res) => {
 
 try{
 
-const item =
-new Item({
-
-name:req.body.name,
-
-description:req.body.description,
-
-category:req.body.category,
-
-price:req.body.price,
-
-wanted:req.body.wanted,
-
-location:req.body.location,
-
-sellerPhone:req.body.sellerPhone,
-
-sellerName:req.body.sellerName,
-
-sellerId:req.body.sellerId,
-
-image:req.file
-?
-`${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`
-:
-""
-
-});
-
-await item.save();
-
-io.emit(
-"newItem",
-item
+const product =
+await Product.create(
+req.body
 );
 
-res.json({
-message:"Uploaded",
-item
-});
+res.json(product);
 
 }catch(err){
 
@@ -626,60 +616,53 @@ message:"Upload failed"
 }
 );
 
-/* =========================
-GET ITEMS
-========================= */
+/* =====================================
+GET PRODUCTS
+===================================== */
 
 app.get(
-"/items",
+"/products",
 async(req,res) => {
 
-try{
-
-const items =
-await Item.find()
+const products =
+await Product.find()
 .sort({
 createdAt:-1
 });
 
-res.json(items);
-
-}catch(err){
-
-console.log(err);
-
-res.status(500).json({
-message:"Server error"
-});
-
-}
+res.json(products);
 
 }
 );
 
-/* =========================
-SINGLE ITEM
-========================= */
+/* =====================================
+GET SINGLE PRODUCT
+===================================== */
 
 app.get(
-"/items/:id",
+"/products/:id",
 async(req,res) => {
 
 try{
 
-const item =
-await Item.findById(
+const product =
+await Product.findById(
 req.params.id
 );
 
-if(item){
+if(!product){
 
-item.views += 1;
+return res.status(404).json({
+message:"Product not found"
+});
 
-await item.save();
 }
 
-res.json(item);
+product.views += 1;
+
+await product.save();
+
+res.json(product);
 
 }catch(err){
 
@@ -694,267 +677,174 @@ message:"Server error"
 }
 );
 
-/* =========================
-LIKE ITEM
-========================= */
+/* =====================================
+DELETE PRODUCT
+===================================== */
 
-app.post(
-"/items/:id/like",
+app.delete(
+"/products/:id",
 async(req,res) => {
 
-try{
-
-const item =
-await Item.findById(
+await Product.findByIdAndDelete(
 req.params.id
 );
 
-if(
-!item.likes.includes(
-req.body.userId
-)
-){
-
-item.likes.push(
-req.body.userId
-);
-
-}
-
-await item.save();
-
-res.json(item);
-
-}catch(err){
-
-console.log(err);
-
-res.status(500).json({
-message:"Like failed"
+res.json({
+message:"Product deleted"
 });
 
 }
+);
+
+/* =====================================
+LIKE PRODUCT
+===================================== */
+
+app.post(
+"/products/:id/like",
+async(req,res) => {
+
+const product =
+await Product.findById(
+req.params.id
+);
+
+product.likes += 1;
+
+await product.save();
+
+res.json({
+likes:product.likes
+});
 
 }
 );
 
-/* =========================
+/* =====================================
 OFFERS
-========================= */
+===================================== */
 
 app.post(
 "/offers",
 async(req,res) => {
 
-try{
-
 const offer =
-new Offer(req.body);
-
-await offer.save();
+await Offer.create(
+req.body
+);
 
 res.json(offer);
 
-}catch(err){
-
-console.log(err);
-
-res.status(500).json({
-message:"Offer failed"
-});
-
-}
-
 }
 );
 
-/* =========================
-GET USERS
-========================= */
+/* =====================================
+GET OFFERS
+===================================== */
 
 app.get(
-"/users",
+"/offers/:sellerId",
 async(req,res) => {
 
-try{
+const offers =
+await Offer.find({
 
-const users =
-await User.find()
-.select("-password");
+sellerId:req.params.sellerId
 
-res.json(users);
-
-}catch(err){
-
-console.log(err);
-
-res.status(500).json({
-message:"Server error"
 });
 
-}
+res.json(offers);
 
 }
 );
 
-/* =========================
-GET MESSAGES
-========================= */
+/* =====================================
+NOTIFICATIONS
+===================================== */
+
+app.get(
+"/notifications/:userId",
+async(req,res) => {
+
+const notifications =
+await Notification.find({
+
+userId:req.params.userId
+
+})
+.sort({
+createdAt:-1
+});
+
+res.json(notifications);
+
+}
+);
+
+/* =====================================
+MESSAGES
+===================================== */
 
 app.get(
 "/messages",
 async(req,res) => {
-
-try{
 
 const messages =
 await Message.find()
 .sort({
 createdAt:1
 })
-.limit(500);
+.limit(300);
 
 res.json(messages);
 
-}catch(err){
-
-console.log(err);
-
-res.status(500).json({
-message:"Server error"
-});
-
-}
-
 }
 );
 
-/* =========================
-DELETE USER
-========================= */
+/* =====================================
+PRIVATE ROOM MESSAGES
+===================================== */
 
-app.delete(
-"/users/:id",
+app.get(
+"/messages/:room",
 async(req,res) => {
 
-try{
+const messages =
+await Message.find({
 
-await User.findByIdAndDelete(
-req.params.id
-);
+room:req.params.room
 
-res.json({
-message:"User deleted"
+})
+.sort({
+createdAt:1
 });
 
-}catch(err){
-
-console.log(err);
-
-res.status(500).json({
-message:"Delete failed"
-});
-
-}
+res.json(messages);
 
 }
 );
 
-/* =========================
-DELETE ITEM
-========================= */
-
-app.delete(
-"/items/:id",
-async(req,res) => {
-
-try{
-
-await Item.findByIdAndDelete(
-req.params.id
-);
-
-res.json({
-message:"Item deleted"
-});
-
-}catch(err){
-
-console.log(err);
-
-res.status(500).json({
-message:"Delete failed"
-});
-
-}
-
-}
-);
-
-/* =========================
-DELETE MESSAGE
-========================= */
-
-app.delete(
-"/messages/:id",
-async(req,res) => {
-
-try{
-
-await Message.findByIdAndDelete(
-req.params.id
-);
-
-res.json({
-message:"Deleted"
-});
-
-}catch(err){
-
-console.log(err);
-
-res.status(500).json({
-message:"Delete failed"
-});
-
-}
-
-}
-);
-
-/* =========================
-ONLINE USERS
-========================= */
-
-let onlineUsers = [];
-
-/* =========================
-SOCKET IO
-========================= */
+/* =====================================
+SOCKET.IO
+===================================== */
 
 io.on(
 "connection",
-socket => {
+(socket) => {
 
-console.log("🟢 User Connected");
+console.log(
+"🟢 User Connected"
+);
 
 /* ONLINE */
 
 socket.on(
 "userOnline",
-username => {
-
-if(
-!onlineUsers.includes(username)
-){
-
-onlineUsers.push(username);
-
-}
+async(user) => {
 
 io.emit(
-"onlineUsers",
-onlineUsers
+"userOnline",
+user
 );
 
 }
@@ -964,9 +854,23 @@ onlineUsers
 
 socket.on(
 "joinRoom",
-roomId => {
+(room) => {
 
-socket.join(roomId);
+socket.join(room);
+
+}
+);
+
+/* TYPING */
+
+socket.on(
+"typing",
+(data) => {
+
+socket.broadcast.emit(
+"typing",
+data
+);
 
 }
 );
@@ -977,137 +881,124 @@ socket.on(
 "sendMessage",
 async(data) => {
 
-try{
-
-const msg =
-new Message({
+const message =
+await Message.create({
 
 username:data.username,
 
 message:data.message,
 
-senderId:data.senderId,
+avatar:data.avatar || "",
 
-receiverId:data.receiverId,
+replyTo:data.replyTo || null,
 
-roomId:data.roomId,
+room:data.room || "public",
 
-replyTo:data.replyTo,
+isAdmin:data.isAdmin || false,
 
-admin:data.admin || false,
-
-ai:data.ai || false,
-
-image:data.image || "",
-
-time:data.time
+image:data.image || ""
 
 });
 
-await msg.save();
+io.to(data.room || "public")
+.emit(
+"newMessage",
+message
+);
 
-/* COMMUNITY */
+/* AI */
 
-if(!data.roomId){
+if(
+data.message
+.toLowerCase()
+.includes("@ai")
+){
+
+setTimeout(() => {
+
+io.to(data.room || "public")
+.emit(
+"newMessage",
+{
+
+username:"AI",
+
+message:
+"🤖 AI assistant is active. How can I help?",
+
+isAI:true,
+
+createdAt:new Date()
+
+}
+);
+
+},1200);
+
+}
+
+/* ADMIN */
+
+if(
+data.message
+.toLowerCase()
+.includes("@admin")
+){
 
 io.emit(
-"receiveMessage",
-msg
+"adminMention",
+{
+
+username:data.username,
+message:data.message
+
+}
 );
 
 }
-
-/* PRIVATE ROOM */
-
-else{
-
-io.to(data.roomId).emit(
-"receivePrivateMessage",
-msg
-);
-
-}
-
-/* NOTIFICATION */
-
-if(data.receiverId){
-
-const notification =
-new Notification({
-
-userId:data.receiverId,
-
-text:`${data.username} sent you a message`
 
 });
 
-await notification.save();
-
-}
-
-}catch(err){
-
-console.log(err);
-
-}
-
-}
-);
-
-/* TYPING */
+/* PRIVATE MESSAGE */
 
 socket.on(
-"typing",
-username => {
-
-socket.broadcast.emit(
-"userTyping",
-username
-);
-
-}
-);
-
-/* ADMIN REPLY */
-
-socket.on(
-"adminReply",
+"privateMessage",
 async(data) => {
 
-try{
+const message =
+await Message.create({
 
-const msg =
-new Message({
-
-username:"ADMIN",
+username:data.username,
 
 message:data.message,
 
-admin:true,
+room:data.room,
 
-time:new Date()
-.toLocaleTimeString([],{
-hour:"2-digit",
-minute:"2-digit"
-})
+avatar:data.avatar || ""
 
 });
 
-await msg.save();
-
-io.emit(
-"receiveMessage",
-msg
+io.to(data.room)
+.emit(
+"privateMessage",
+message
 );
 
-}catch(err){
+});
 
-console.log(err);
+/* MESSAGE SEEN */
 
-}
+socket.on(
+"messageSeen",
+(data) => {
 
-}
+io.to(data.room)
+.emit(
+"messageSeen",
+data
 );
+
+});
 
 /* DISCONNECT */
 
@@ -1115,34 +1006,42 @@ socket.on(
 "disconnect",
 () => {
 
-console.log("🔴 User Disconnected");
-
-}
+console.log(
+"🔴 User Disconnected"
 );
 
 }
 );
 
-/* =========================
+}
+);
+
+/* =====================================
 HOME
-========================= */
+===================================== */
 
-app.get("/", (req,res) => {
+app.get(
+"/",
+(req,res) => {
 
 res.send(
 "🚀 Swaply Backend Running"
 );
 
-});
+}
+);
 
-/* =========================
-START
-========================= */
+/* =====================================
+START SERVER
+===================================== */
 
-server.listen(PORT, () => {
+server.listen(
+PORT,
+() => {
 
 console.log(
 `🚀 Server running on port ${PORT}`
 );
 
-});
+}
+);
